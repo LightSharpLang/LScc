@@ -5,14 +5,10 @@
 /*
 todo:
 
-conditions
-https://www.tutorialspoint.com/assembly_programming/assembly_conditions.htm#:~:text=CMP%20is%20often%20used%20for%20comparing%20whether%20a,or%20equal%20to%2010%2C%20then%20jump%20to%20LP1
-
+finish types
 signed unsigned (£ = unsigned)
 
-preprocessors
-
-fix - operator (i + 5; i - 5)
+preprocessors {
 
 def preprocessor():
   a b
@@ -21,19 +17,32 @@ def preprocessor():
   else
   //
   endif
+}
 
 type child token(type...)
 
 struct token
 
-typedef token1 -> token2
+typedef token1 token2
 
-$1 = a like "a" // search for a at the beggining or the end
-
-fixed int a
+fixed int a = 0
 float a = 0.5 // error invalid convertion of float to int
-int a
+int a = 0
 float a = 0.5 // ok
+
+with "stdlang.pclslib"
+extern printf
+
+def mainCRTStartup():
+  start()
+  return(0)
+end
+
+def start():
+  printf("%d", 0.5)
+  return(0)
+end
+
 */
 
 std::map < string, Tokentypes > tokens_dict = {
@@ -52,8 +61,8 @@ std::map < string, Tokentypes > tokens_dict = {
     { "int", Tokentypes::type },
     { "str", Tokentypes::type },
     { "bool", Tokentypes::type },
-    { "bin", Tokentypes::type },
-    { "hex", Tokentypes::type },
+    { "ptr", Tokentypes::type },
+    { "any", Tokentypes::type },
     { "global", Tokentypes::global },
     { "local", Tokentypes::local },
     { "\n", Tokentypes::lf },
@@ -105,7 +114,7 @@ string fcout(string str) {
     return ostr;
 }
 
-void print_t_array(const vector<token> a, std::ostream& o = std::cout)
+void print_t_array(const vector<token> a, std::ostream& o)
 {
     size_t N = a.size();
     if (N > 0) {
@@ -130,13 +139,14 @@ int main(int argc, char** argv)
     string Cconvention;
     bool save = false;
     if (argc == 1) {
-        cout << "LScc: fatal: no input file specified                   \n\
+        cout << Error::errorTypeError << "LScc: fatal: no input file specified" << endl << Error::errorTypeNormal
+    << "\
     Usage: LScc[options...]                                             \n\
                                                                         \n\
     Options :                                                           \n\
     ----compilation options----                                         \n\
     -i    input file                                                    \n\
-    -o    output file | default: input file.o                           \n\
+    -o    output file | default: input file.obj                         \n\
     -cc   calling convention[SysVi386, SysV, M64] | default: SysV       \n\
     -f    format[elf32, elf64, elfx32, win32, win64] | default: elf64   \n\
     -n    no start function                                             \n\
@@ -210,7 +220,7 @@ int main(int argc, char** argv)
         }
 
         vector<token> tokens = tokenize(file);
-        check_externs(tokens);
+
         check_pcllibs(tokens);
 
         precompilation clib;
@@ -230,9 +240,10 @@ int main(int argc, char** argv)
             }
         }
 
+        fuse_symbols(&tokens);
         identify_tokens(&tokens);
+        check_externs(tokens);
         
-
         for (string& e : externs) {
             section_text += "extern " + e + "\n";
         }
@@ -248,7 +259,7 @@ int main(int argc, char** argv)
 
         string code = section_text + section_data;
 
-        //cout << code << endl;
+        cout << code << endl;
 
         ofstream asFile(string(afile).c_str());
 

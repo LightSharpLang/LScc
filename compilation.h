@@ -9,13 +9,17 @@ public:
     string name = "";
     Tokentypes type;
     string reg = "";
-    bool in_condition = false;
+    Basetype lastUse;
+    Basetype firstType;
+    bool fixedType = false;
+    bool inCondition = false;
     constant() {};
-    constant(string str, Tokentypes _type, string _reg) {
+    constant(string str, Tokentypes _type, string _reg, Basetype _firstType) {
         name = str;
         type = _type;
         reg = _reg;
-        in_condition = false;
+        firstType = firstType;
+        inCondition = false;
     }
 };
 
@@ -39,6 +43,7 @@ public:
     string name = "";
     Tokentypes type;
     string reg = "";
+    constant* ref = nullptr;
     bool is_litteral;
     argument(string str, Tokentypes _type, bool litteral) {
         name = str;
@@ -57,7 +62,7 @@ private:
     vector<constant> constants;
     vector<condition> conditions;
     vector<string> labels;
-    bool check_condi(vector<token> line, vector<token> _tokens, bool isincondi);
+    bool check_condi(vector<token> line, vector<token> _tokens, int* counter, bool isincondi);
     int exec_condi(vector<token> line, vector<token> _tokens, string name, int _i, bool multiline);
     void register_condi(vector<token> line);
     constant* get_registered_constant(string t);

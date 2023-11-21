@@ -5,8 +5,22 @@ token::token(string str) {
     this->t = str;
 }
 
+token::token(string str, int _line, Tokentypes _type) {
+    this->t = str;
+    this->line = _line;
+    this->type = _type;
+
+}
+
 bool in(string a, string b[], int len) {
     for (int i = 0; i < len; i++) {
+        if (a == b[i]) return true;
+    }
+    return false;
+}
+
+bool in(string a, vector<string> b) {
+    for (int i = 0; i < b.size(); i++) {
         if (a == b[i]) return true;
     }
     return false;
@@ -26,8 +40,15 @@ size_t in(string a, vector<coperator> b) {
     return false;
 }
 
+size_t in(string a, vector<token> b) {
+    for (size_t i = 0; i < b.size(); i++) {
+        if (a == b[i].t) return true;
+    }
+    return false;
+}
+
 bool alnum(string str) {
-    string valid_chars = "azertyuiopqsdfghjklmwxcvbnAZERTYUIOPQSDFGHJKLMWXCVBN1234567890";
+    string valid_chars = "_azertyuiopqsdfghjklmwxcvbnAZERTYUIOPQSDFGHJKLMWXCVBN1234567890";
     for (char c : str) {
         if (valid_chars.find(c) == string::npos) return false;
     }
@@ -69,7 +90,7 @@ void identify_tokens(vector<token>* tokens, bool is_lib) {
                 cout << Error::errorTypeWarn << "warning:" << Error::errorTypeNormal << " syntax: '" << tokens->at(i).t << "' at line " << tokens->at(i).line << " may not be right" << endl;
             }
             else {
-                cout << Error::errorTypeError << "Error" << Error::errorTypeNormal << " at line " << tokens->at(i).line << ", invalid syntax: '" << tokens->at(i).t << endl;
+                cout << Error::errorTypeError << "Error" << Error::errorTypeNormal << " at line " << tokens->at(i).line << ", invalid syntax: '" << tokens->at(i).t << "'" << endl;
                 exit(1);
             }
         }
@@ -83,11 +104,12 @@ void fuse_symbols(vector<token>* tokens) {
         fused = 0;
         size = tokens->size();
         for (size_t i = 0; i < size - 1; i++) {
-                if (tokens_dict.find(tokens->at(i - fused).t + tokens->at(i - fused + 1).t) != tokens_dict.end()) {
-                    tokens->at(i - fused).t += tokens->at(i - fused + 1).t;
-                    tokens->erase((tokens->begin() + (i - fused)) + 1);
-                    fused += 1;
-                }
+            if ((tokens_dict.find(tokens->at(i - fused).t + tokens->at(i - fused + 1).t) != tokens_dict.end()) ||
+                (in(tokens->at(i - fused).t + tokens->at(i - fused + 1).t, operators))) {
+                tokens->at(i - fused).t += tokens->at(i - fused + 1).t;
+                tokens->erase((tokens->begin() + (i - fused)) + 1);
+                fused += 1;
+            }
         }
     }
 }
@@ -244,7 +266,6 @@ vector<token> tokenize(string file, bool isstr) {
         }
     }
     fuse_string_litterals(&tokens);
-    fuse_symbols(&tokens);
     clean_tokens(&tokens);
     return tokens;
 }

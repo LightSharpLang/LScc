@@ -17,6 +17,17 @@ struct coperator {
     string fcode(int ident);
 };
 
+enum class Basetype {
+    _any = 0,
+    _int,
+    _float,
+    _string,
+    _bool,
+    _bin,
+    _hex,
+    _byte
+};
+
 enum class Tokentypes {
     null = 0,
     definition,
@@ -88,11 +99,15 @@ public:
     int constant = 0;
 
     token(string str);
+    token(string str, int line, Tokentypes type);
 };
 
+void print_t_array(const vector<token> a, std::ostream& o = std::cout);
 void fuse_symbols(vector<token>* tokens);
 bool in(string a, string b[], int len);
+bool in(string a, vector<string> b);
 size_t in(string a, char** b, int len);
+size_t in(string a, vector<token> b);
 void fuse_string_litterals(vector<token>* tokens);
 void clean_tokens(vector<token> *tokens);
 vector<token> tokenize(string file, bool isstr = false);
