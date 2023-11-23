@@ -4,12 +4,10 @@
 token::token(string str) {
     this->t = str;
 }
-
 token::token(string str, int _line, Tokentypes _type) {
     this->t = str;
     this->line = _line;
     this->type = _type;
-
 }
 
 bool in(string a, string b[], int len) {
@@ -18,28 +16,24 @@ bool in(string a, string b[], int len) {
     }
     return false;
 }
-
 bool in(string a, vector<string> b) {
     for (int i = 0; i < b.size(); i++) {
         if (a == b[i]) return true;
     }
     return false;
 }
-
 size_t in(string a, char** b, int len) {
     for (int i = 0; i < len; i++) {
         if (a == b[i]) return i;
     }
     return -1;
 }
-
 size_t in(string a, vector<coperator> b) {
     for (size_t i = 0; i < b.size(); i++) {
         if (a == b[i].name) return true;
     }
     return false;
 }
-
 size_t in(string a, vector<token> b) {
     for (size_t i = 0; i < b.size(); i++) {
         if (a == b[i].t) return true;
@@ -55,6 +49,23 @@ bool alnum(string str) {
     return true;
 }
 
+string fromType(Basetype t) {
+    for (const auto& i : type_dict) {
+        if (i.second == t) {
+            return i.first;
+        }
+    }
+    return "none";
+}
+
+Basetype getType(token t) {
+    const auto it = type_dict.find(t.t);
+    if(it != type_dict.end()) {
+        return it->second;
+    }
+    return Basetype::_none;
+}
+
 void identify_tokens(vector<token>* tokens, bool is_lib) {
     int line = 1;
     bool nowarn = false;
@@ -67,6 +78,7 @@ void identify_tokens(vector<token>* tokens, bool is_lib) {
             is_comment = false;
         }
         const auto it = tokens_dict.find(tokens->at(i).t);
+        const auto it2 = type_dict.find(tokens->at(i).t);
         if (is_comment) {
             tokens->at(i).type == Tokentypes::comment;
         }
@@ -75,6 +87,11 @@ void identify_tokens(vector<token>* tokens, bool is_lib) {
             tokens->at(i).type = it->second;
             tokens->at(i).identified = true;
             if (tokens->at(i).type == Tokentypes::comment) is_comment = true;
+        }
+        elif(it2 != type_dict.end()) {
+            // token in token_dict
+            tokens->at(i).type = Tokentypes::type;
+            tokens->at(i).identified = true;
         }
         elif(in(tokens->at(i).t, operators)) {
             // token in symbols

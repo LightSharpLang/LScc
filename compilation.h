@@ -4,25 +4,6 @@
 #include "Error.h"
 using namespace std;
 
-class constant {
-public:
-    string name = "";
-    Tokentypes type;
-    string reg = "";
-    Basetype lastUse;
-    Basetype firstType;
-    bool fixedType = false;
-    bool inCondition = false;
-    constant() {};
-    constant(string str, Tokentypes _type, string _reg, Basetype _firstType) {
-        name = str;
-        type = _type;
-        reg = _reg;
-        firstType = firstType;
-        inCondition = false;
-    }
-};
-
 class condition {
 public:
     string name = "";
@@ -35,20 +16,6 @@ public:
         left = _left;
         op = _op;
         right = _right;
-    }
-};
-
-class argument {
-public:
-    string name = "";
-    Tokentypes type;
-    string reg = "";
-    constant* ref = nullptr;
-    bool is_litteral;
-    argument(string str, Tokentypes _type, bool litteral) {
-        name = str;
-        type = _type;
-        is_litteral = litteral;
     }
 };
 
@@ -67,7 +34,7 @@ private:
     void register_condi(vector<token> line);
     constant* get_registered_constant(string t);
     size_t is_registered_constant(string t);
-    vector<argument> browse_argument(vector<token>& tokens);
+    vector<constant> browse_argument(vector<token>& tokens);
     void register_function(vector<token> tokens);
     void compile_operation(vector<token>& _tokens);
     string get_reg();
@@ -105,7 +72,7 @@ extern vector<string> externs;
 extern vector<string> pcllibs;
 extern vector<int> argument_order;
 
-vector<argument> browse_parameters(vector<token>& tokens);
+vector<constant> browse_parameters(vector<token>& tokens);
 bool is_int(token t);
 bool is_float(token t);
 bool is_string(token t);

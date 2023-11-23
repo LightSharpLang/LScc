@@ -5,19 +5,9 @@
 /*
 todo:
 
-finish types
+fixed types
+
 signed unsigned (£ = unsigned)
-
-preprocessors {
-
-def preprocessor():
-  a b
-  if a
-  //
-  else
-  //
-  endif
-}
 
 type child token(type...)
 
@@ -25,25 +15,18 @@ struct token
 
 typedef token1 token2
 
-fixed int a = 0
-float a = 0.5 // error invalid convertion of float to int
-int a = 0
-float a = 0.5 // ok
-
-with "stdlang.pclslib"
-extern printf
-
-def mainCRTStartup():
-  start()
-  return(0)
-end
-
-def start():
-  printf("%d", 0.5)
-  return(0)
-end
+preprocessors
 
 */
+
+std::map < string, Basetype > type_dict = {
+    { "float", Basetype::_float },
+    { "int", Basetype::_int },
+    { "str", Basetype::_string },
+    { "bool", Basetype::_bool },
+    { "ptr", Basetype::_ptr },
+    { "any", Basetype::_any }
+};
 
 std::map < string, Tokentypes > tokens_dict = {
     { "def", Tokentypes::definition },
@@ -55,14 +38,8 @@ std::map < string, Tokentypes > tokens_dict = {
     { ")", Tokentypes::parameter_end },
     { ",", Tokentypes::separator },
     { ".", Tokentypes::float_separator },
-    { ";", Tokentypes::line_separator },
+    { ";", Tokentypes::lf },
     { "\\", Tokentypes::line_concat },
-    { "float", Tokentypes::type },
-    { "int", Tokentypes::type },
-    { "str", Tokentypes::type },
-    { "bool", Tokentypes::type },
-    { "ptr", Tokentypes::type },
-    { "any", Tokentypes::type },
     { "global", Tokentypes::global },
     { "local", Tokentypes::local },
     { "\n", Tokentypes::lf },
@@ -86,12 +63,8 @@ std::map < string, Tokentypes > tokens_dict = {
     { "!<", Tokentypes::jnl },
     { "<=", Tokentypes::jle },
     { "!<=", Tokentypes::jnle },
-    { "!", Tokentypes::inv },
-    { "\\n", Tokentypes::strret },
-    { "\\0", Tokentypes::strterm },
-    { "\\", Tokentypes::strback }
+    { "!", Tokentypes::inv }
     };
-
 
 int ROspaces = 0;
 string section_data = "SECTION .data:\n";
@@ -150,7 +123,10 @@ int main(int argc, char** argv)
     -cc   calling convention[SysVi386, SysV, M64] | default: SysV       \n\
     -f    format[elf32, elf64, elfx32, win32, win64] | default: elf64   \n\
     -n    no start function                                             \n\
-    -s    save asm file\n";
+    -s    save asm file                                                 \n\
+                                                                        \n\
+    ----warnings options----                                            \n\
+    --w-type    disable type convertion warnings                        \n";
     }
     else {
         size_t in1 = in("-i", argv, argc);
@@ -194,11 +170,16 @@ int main(int argc, char** argv)
             Cconvention = "SysV";
         }
 
+        in1 = in("--w-type", argv, argc);
+        if (in1 != -1) {
+            Error::enabledWarns[Error::typeWarn] = false;
+        }
+
         if (Fformat == "elf64" || Fformat == "win64") {
-            REG.insert(REG.end(), { "rax", "rbx", "rcx", "rdx", "rsi", "rdi", "rbp", "rsp", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15", "xmm0", "xmm1", "xmm2", "xmm3", "eax", "ebx", "ecx", "edx", "esi", "edi", "ebp", "esp", "r8d", "r9d", "r10d", "r11d", "r12d", "r13d", "r14d", "r15d" });
+            REG.insert(REG.end(), { "rax", "rbx", "rcx", "rdx", "rsi", "rdi", "rbp", "rsp", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15", "xmm0", "xmm1", "xmm2", "xmm3", "eax", "ebx", "ecx", "edx", "esi", "edi", "ebp", "esp", "r8d", "r9d", "r10d", "r11d", "r12d", "r13d", "r14d", "r15d", "cr0", "cr2", "cr3", "cr4", "cr8" });
         }
         elif(Fformat == "elf32" || Fformat == "win32" || Fformat == "elfx32") {
-            REG.insert(REG.end(), { "eax", "ebx", "ecx", "edx", "esi", "edi", "ebp", "esp", "r8d", "r9d", "r10d", "r11d", "r12d", "r13d", "r14d", "r15d" });
+            REG.insert(REG.end(), { "eax", "ebx", "ecx", "edx", "esi", "edi", "ebp", "esp", "r8d", "r9d", "r10d", "r11d", "r12d", "r13d", "r14d", "r15d", "cr0", "cr2", "cr3", "cr4", "cr8"});
         }
         else {
             cout << "Error: invalid format \"" << Fformat << "\" !" << endl;
@@ -229,6 +210,7 @@ int main(int argc, char** argv)
             for (size_t i = 0; i < pcllibs.size(); i++) {
                 tokenlibs.clear();
                 tokenlibs = tokenize(pcllibs[i]);
+                fuse_symbols(&tokenlibs);
                 identify_tokens(&tokenlibs, true);
                 clib.precompile_lib(tokenlibs);
             }

@@ -10,22 +10,14 @@
 #define elif else if
 using namespace std;
 
-struct coperator {
-    std::string name;
-    vector<std::string> parameters;
-    std::string code;
-    string fcode(int ident);
-};
-
 enum class Basetype {
-    _any = 0,
+    _none = 0,
+    _any,
     _int,
     _float,
     _string,
     _bool,
-    _bin,
-    _hex,
-    _byte
+    _ptr
 };
 
 enum class Tokentypes {
@@ -41,14 +33,12 @@ enum class Tokentypes {
     parameter_end,
     separator,
     float_separator,
-    line_separator,
     line_concat,
     _constant,
     variable,
     global_variable,
     function,
     litteral,
-    parameter,
     _int,
     _float,
     _string,
@@ -56,7 +46,6 @@ enum class Tokentypes {
     ptr,
     operation,
     type,
-    unidentifyed_type,
     global,
     local,
     lf,
@@ -80,14 +69,34 @@ enum class Tokentypes {
     jnge,
     jle,
     jng,
-    inv,
-    strret,
-    strterm,
-    strback,
+    inv
 };
 
-extern std::map < string, Tokentypes > tokens_dict;
-extern vector<coperator> operators;
+class constant {
+public:
+    string name = "";
+    Tokentypes type;
+    string reg = "";
+    Basetype lastUse;
+    bool fixedType = false;
+    bool inCondition = false;
+    constant() {};
+    constant(string str, Tokentypes _type, string _reg, Basetype _Type) {
+        name = str;
+        type = _type;
+        reg = _reg;
+        lastUse = _Type;
+        inCondition = false;
+    }
+};
+
+struct coperator {
+    std::string name;
+    vector<constant> parameters;
+    std::string code;
+    Basetype type;
+    string fcode(int ident);
+};
 
 class token
 {
@@ -102,6 +111,12 @@ public:
     token(string str, int line, Tokentypes type);
 };
 
+extern std::map < string, Basetype > type_dict;
+extern std::map < string, Tokentypes > tokens_dict;
+extern vector<coperator> operators;
+
+string fromType(Basetype t);
+Basetype getType(token t);
 void print_t_array(const vector<token> a, std::ostream& o = std::cout);
 void fuse_symbols(vector<token>* tokens);
 bool in(string a, string b[], int len);
