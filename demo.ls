@@ -1,4 +1,6 @@
 "note that this file doesn't compile, the issue will be found and fixed! thank you"
+"this demo file has a lot of warnings due to the demonstration os the language's capability"
+"you can remove the types warnings with --w-type"
 "demo file - not usable"
 
 "using precompiled library"
@@ -15,14 +17,17 @@ def start(i):
   "or"
   int b = 0
   "pointer to b"
-  ptr_b = 0
+  ptr ptr_b = 0
   ptr_b <- b
 
+  "set one to the b"
+  1 -> ptr_b
+
   "defining condition named condi_i"
-  $condi_i = i == 1
+  $condi_i = b == 1
 
   "using multiline-synax condition condi_i"
-  $condi_i 
+  $condi_i
     i + 2
     i - 1
   $
