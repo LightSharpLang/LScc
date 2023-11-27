@@ -71,8 +71,9 @@ void identify_tokens(vector<token>* tokens, bool is_lib) {
     bool nowarn = false;
     bool is_comment = false;
     if (tokens->at(0).t == "nowarn") nowarn = true;     
-    for (int i = 0; i < tokens->size(); i++) {
+    for (int i = 0; i < tokens->size() - 1; i++) {
         tokens->at(i).line = line;
+        tokens->at(i).next = &tokens->at(i + 1);
         if (tokens->at(i).t == "\n") {
             line += 1;
             is_comment = false;

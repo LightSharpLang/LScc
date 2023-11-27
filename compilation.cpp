@@ -4,18 +4,44 @@ void check_externs(vector<token> tokens) {
     /* checking for external functions / variables
     
     an extern is always following this order:
-    extern  [function]
-    token 1 [token 2]
+    extern  [constant] ( ) = function
+    token 1 [token 2]  3 4
+
+    extern  [constant] = variable
+    token 1 [token2]
+
     
     so we need to identify the token of type Tokentypes::extern and register the following token
     */
     bool next_e = false;
-    for (token& t : tokens) {
+    for (auto t : tokens) {
         if (next_e) {
-            externs.push_back(t.t);
+            if (t.next->type == Tokentypes::parameter_start)
+                externs.push_back(constant(t.t, Tokentypes::function, "", Basetype::_any));
+            else
+                externs.push_back(constant(t.t, Tokentypes::variable, "", Basetype::_any));
             next_e = false;
         }
         if (t.type == Tokentypes::_extern) next_e = true;
+    }
+}
+
+void check_includes(vector<token> tokens) {
+    /* checking for include file
+
+    an include is always following this order:
+    include [file]
+    token 1 [token 2]
+
+    so we need to identify the token of type Tokentypes::_include and register the following token
+    */
+    bool next_e = false;
+    for (auto t : tokens) {
+        if (next_e) {
+            includes_f.push_back(t.t);
+            next_e = false;
+        }
+        if (t.type == Tokentypes::_include) next_e = true;
     }
 }
 
@@ -226,11 +252,14 @@ void compilation::register_function(vector<token> tokens) {
     constants.push_back(constant("nothing", Tokentypes::function, "", Basetype::_any));
     constants.push_back(constant("int", Tokentypes::function, "", Basetype::_any));
     constants.push_back(constant("syscall", Tokentypes::function, "", Basetype::_any));
+    constants.push_back(constant("nop", Tokentypes::function, "", Basetype::_any));
+    constants.push_back(constant("label", Tokentypes::function, "", Basetype::_any));
+    constants.push_back(constant("goto", Tokentypes::function, "", Basetype::_any));
     for (int i : function) {
         constants.push_back(constant(tokens[i + 1].t, Tokentypes::function, "", Basetype::_any));
     }
-    for (string e : externs) {
-        constants.push_back(constant(e, Tokentypes::_extern, "", Basetype::_any));
+    for (constant e : externs) {
+        constants.push_back(e);
     }
 }
 
@@ -568,17 +597,23 @@ string compilation::interpret_and_compile(vector<token>& _tokens) {
 
     for (size_t i = 0; i < _tokens.size(); i++) {
         if (_tokens[i].type == Tokentypes::_constant || _tokens[i].t == "int") {
-            size_t consta = is_registered_constant(_tokens[i].t);
-            if (consta != -1) {
-                if (constants[consta].type == Tokentypes::function || constants[consta].type == Tokentypes::_extern) {
-                    if (_tokens[i + 1].type == Tokentypes::parameter_start) fname = constants[consta].name;
-                    break;
+            if (_tokens[i].next->type == Tokentypes::parameter_start) {
+                size_t consta = is_registered_constant(_tokens[i].t);
+                if (consta != -1) {
+                    if (constants[consta].type == Tokentypes::function || constants[consta].type == Tokentypes::_extern) {
+                        if (_tokens[i + 1].type == Tokentypes::parameter_start) fname = constants[consta].name;
+                        break;
+                    }
+                    else {
+                        if (detect_constant_type(_tokens[i], _tokens) == Tokentypes::function) {
+                            cout << Error::errorTypeError << "Error" << " at line " << Error::errorTypeNormal << _tokens[i].line << ": function " << _tokens[i].t << " called but not created";
+                            exit(1);
+                        }
+                    }
                 }
                 else {
-                    if (detect_constant_type(_tokens[i], _tokens) == Tokentypes::function) {
-                        cout << Error::errorTypeError << "Error" << " at line " << Error::errorTypeNormal << _tokens[i].line << ": function " << _tokens[i].t << " called but not created";
-                        exit(1);
-                    }
+                    cout << Error::errorTypeError << "Error at line " << Error::errorTypeNormal << _tokens[0].line << ": Cannot call non existant function \"" << _tokens[i].t << "\" !" << endl;
+                    exit(1);
                 }
             }
         }
@@ -604,7 +639,7 @@ string compilation::interpret_and_compile(vector<token>& _tokens) {
                 code << string(ident, ' ') << "ret" << endl;
             }
         }
-        elif(fname == "int") {
+        elif(fname == "nop") {
             code << string(ident, ' ') << "nop" << endl;
         }
         elif(fname == "int") {
@@ -620,7 +655,7 @@ string compilation::interpret_and_compile(vector<token>& _tokens) {
         }
         elif(fname == "goto") {
             if (in(parameters[0].name, this->labels)) {
-                code << string(ident, ' ') << "jmp " << parameters[0].name << endl;
+                code << string(ident, ' ') << "jmp ." << parameters[0].name << endl;
             }
             else {
                 cout << Error::errorTypeError << "Error" << " at line " << Error::errorTypeNormal << _tokens[0].line << ": label \"" << parameters[0].name << "\" does not exist!" << endl;
@@ -862,6 +897,7 @@ string compilation::browse_value(vector<token>& _tokens, bool is_global) {
             }
             elif(is_char(_tokens[i])) return _tokens[i].t;
             elif(is_list(_tokens[i])) return "ptr";
+
             elif(_tokens[i].type == Tokentypes::_constant) {
                 size_t consta = is_registered_constant(_tokens[i].t);
                 if (consta == -1)
@@ -870,8 +906,13 @@ string compilation::browse_value(vector<token>& _tokens, bool is_global) {
                     exit(1);
                 }
                 string value;
-                if (constants[consta].reg != "") value = constants[consta].reg;
-                else value = constants[consta].name;
+                if (constants[consta].type == Tokentypes::function) {
+                    value = REG[0];
+                }
+                else {
+                    if (constants[consta].reg != "") value = constants[consta].reg;
+                    else value = constants[consta].name;
+                }
                 return value;
 
             }
@@ -941,11 +982,10 @@ string compilation::compile_function(int function_start, vector<token>& _tokens)
         if (tokens[i].type == Tokentypes::lf) {
             if (!is_first_line) {
                 line.push_back(tokens[i]);
-                code << "; line " << line[0].line << endl;
                 condi = check_condi(line, tokens, &i, false);
                 if (condi == false) {
-                    interpret_and_compile_var(line);
                     interpret_and_compile(line);
+                    interpret_and_compile_var(line);
                 }
                 line.erase(line.begin(), line.end());
             }
@@ -963,6 +1003,16 @@ vector<int> get_functions(vector<token> tokens) {
     for (int i = 0; i < tokens.size(); i++) {
         if (tokens[i].type == Tokentypes::definition && tokens[i + 1].type == Tokentypes::_constant) {
             functions.push_back(i);
+        }
+    }
+    return functions;
+}
+
+vector<string> get_functions_name(vector<token> tokens) {
+    vector<string> functions;
+    for (int i = 0; i < tokens.size(); i++) {
+        if (tokens[i].type == Tokentypes::definition && tokens[i + 1].type == Tokentypes::_constant) {
+            functions.push_back(tokens[i+1].t);
         }
     }
     return functions;

@@ -61,14 +61,17 @@ public:
 };
 
 void check_externs(vector<token> tokens);
+void check_includes(vector<token> tokens);
 void check_pcllibs(vector<token> tokens);
 vector<int> get_functions(vector<token> tokens);
+vector<string> get_functions_name(vector<token> tokens);
 
 extern vector<string> REG;
 extern int ROspaces;
 extern vector<constant> spaces;
 extern string section_data;
-extern vector<string> externs;
+extern vector<constant> externs;
+extern vector<string> includes_f;
 extern vector<string> pcllibs;
 extern vector<int> argument_order;
 

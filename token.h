@@ -51,6 +51,7 @@ enum class Tokentypes {
     lf,
     colon,
     _extern,
+    _include,
     with,
     comment,
     _operator,
@@ -106,7 +107,7 @@ public:
     bool identified = false;
     Tokentypes type;
     int constant = 0;
-
+    token* next;
     token(string str);
     token(string str, int line, Tokentypes type);
 };
