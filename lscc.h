@@ -3,7 +3,6 @@
 #include <filesystem>
 #include <cstdlib>
 #include <string>
-#include <algorithm>
 #include "compilation.h"*
 using namespace std;
 

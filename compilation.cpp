@@ -1,5 +1,70 @@
 #include "compilation.h"
 
+compilation compile_file(string file, string& section_text, compilation c) {
+    vector<token> tokens = tokenize(file);
+    precompilation clib;
+    vector<token> tokenlibs;
+
+    check_pcllibs(tokens);
+
+    if (pcllibs.size() > 0) {
+        for (size_t i = 0; i < pcllibs.size(); i++) {
+            tokenlibs.clear();
+            tokenlibs = tokenize(pcllibs[i]);
+            fuse_symbols(&tokenlibs);
+            identify_tokens(&tokenlibs, true);
+            clib.precompile_lib(tokenlibs);
+        }
+
+        if (clib.operatorslib.size() > 0) {
+            for (size_t i = 0; i < clib.operatorslib.size(); i++) {
+                operators.push_back(clib.operatorslib[i]);
+            }
+        }
+    }
+
+    vector<string> subincludes;
+
+    fuse_symbols(&tokens);
+    identify_tokens(&tokens);
+    check_externs(tokens);
+    check_includes(tokens, subincludes);
+
+    // compiling includes
+
+    for (string& e : subincludes) {
+        if (e.size() <= 1) continue;
+        string ne = e.substr(1, e.size() - 2);
+        filesystem::path fileOption1 = (filesystem::current_path() / filesystem::path(ne));
+        filesystem::path fileOption2 = (WorkingDirectory / filesystem::path(ne));
+        vector<token> i_tokens;
+        if (filesystem::exists(fileOption1)) {
+            compilation nc = compile_file(fileOption1.string(), section_text, c);
+            c.labels.insert(c.labels.end(), nc.labels.begin(), nc.labels.end());
+            for (auto& i : nc.constants) c.add_external_constant(i);
+            c.code << nc.code.str();
+            c.L = nc.L;
+        }
+        else {
+            compilation nc = compile_file(fileOption2.string(), section_text, c);
+            c.labels.insert(c.labels.end(), nc.labels.begin(), nc.labels.end());
+            for (auto& i : nc.constants) c.add_external_constant(i);
+            c.code << nc.code.str();
+            c.L = nc.L;
+        }
+    }
+
+    vector<int> functions = get_functions(tokens);
+    sort(functions.begin(), functions.end());
+    functions.erase(unique(functions.begin(), functions.end()), functions.end());
+
+    for (int f : functions) {
+        section_text += c.compile_function(f, tokens);
+    }
+
+    return c;
+}
+
 void check_externs(vector<token> tokens) {
     /* checking for external functions / variables
     
@@ -19,14 +84,14 @@ void check_externs(vector<token> tokens) {
             if (t.next->type == Tokentypes::parameter_start)
                 externs.push_back(constant(t.t, Tokentypes::function, "", Basetype::_any));
             else
-                externs.push_back(constant(t.t, Tokentypes::variable, "", Basetype::_any));
+                externs.push_back(constant(t.t, Tokentypes::global_variable, "", Basetype::_any));
             next_e = false;
         }
         if (t.type == Tokentypes::_extern) next_e = true;
     }
 }
 
-void check_includes(vector<token> tokens) {
+void check_includes(vector<token> tokens, vector<string>& include_f) {
     /* checking for include file
 
     an include is always following this order:
@@ -38,7 +103,7 @@ void check_includes(vector<token> tokens) {
     bool next_e = false;
     for (auto t : tokens) {
         if (next_e) {
-            includes_f.push_back(t.t);
+            include_f.push_back(t.t);
             next_e = false;
         }
         if (t.type == Tokentypes::_include) next_e = true;
@@ -191,6 +256,23 @@ bool is_char(token t) {
 bool is_list(token t) {
     if (t.t[0] == '[') return true;
     return false;
+}
+
+compilation::compilation(compilation& c) {
+    // not a replacement but an addition
+    this->labels.insert(this->labels.end(), c.labels.begin(), c.labels.end());
+    this->constants.insert(this->constants.end(), c.constants.begin(), c.constants.end());
+    this->code << c.code.str();
+}
+
+compilation compilation::operator =(const compilation& nc) {
+    // not a replacement but an addition
+    compilation c;
+    c.labels.insert(c.labels.end(), nc.labels.begin(), nc.labels.end());
+    c.constants.insert(c.constants.end(), nc.constants.begin(), nc.constants.end());
+    c.code << nc.code.str();
+    c.L = nc.L;
+    return c;
 }
 
 Tokentypes compilation::detect_constant_type(token tok, vector<token>& line) {
@@ -605,10 +687,8 @@ string compilation::interpret_and_compile(vector<token>& _tokens) {
                         break;
                     }
                     else {
-                        if (detect_constant_type(_tokens[i], _tokens) == Tokentypes::function) {
-                            cout << Error::errorTypeError << "Error" << " at line " << Error::errorTypeNormal << _tokens[i].line << ": function " << _tokens[i].t << " called but not created";
-                            exit(1);
-                        }
+                        cout << Error::errorTypeError << "Error at line " << Error::errorTypeNormal << _tokens[i].line << ": function " << _tokens[i].t << " called but not created";
+                        exit(1);
                     }
                 }
                 else {
@@ -934,6 +1014,9 @@ string compilation::compile_function(int function_start, vector<token>& _tokens)
     conditions.clear();
     this->stack = 8;
 
+    // add the external constants
+    constants.insert(constants.end(), extConstants.begin(), extConstants.end());
+
     // getting the function's tokens
     for (int i = function_start; i < _tokens.size(); i++) {
         if (_tokens[i].type != Tokentypes::end) {
@@ -996,6 +1079,13 @@ string compilation::compile_function(int function_start, vector<token>& _tokens)
         elif(!is_first_line) line.push_back(tokens[i]);
     }
     return code.str();
+}
+
+void compilation::add_external_constant(constant c) {
+    if (c.type == Tokentypes::function || c.type == Tokentypes::global_variable) {
+        if (is_registered_constant(c.name) == -1)
+            extConstants.push_back(c);
+    }
 }
 
 vector<int> get_functions(vector<token> tokens) {

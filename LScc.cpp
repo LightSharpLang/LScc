@@ -17,8 +17,6 @@ struct token
 
 typedef token1 token2
 
-include recursivity
-
 preprocessors
 
 */
@@ -89,18 +87,11 @@ map<LsccArg, string> Args{
     {LsccArg::cc, "" },
 };
 
-string SplitFileName(const string& str)
-{
-    size_t found;
-    found = str.find_last_of("/\\");
-    return str.substr(0, found);
-}
-
+filesystem::path WorkingDirectory;
 
 int main(int argc, char** argv)
 {
     string afile;
-    bool save = false;
     if (argc == 1) {
         cout << Error::errorTypeError << "LScc: fatal: no input file specified" << endl << Error::errorTypeNormal
     << "\
@@ -120,6 +111,7 @@ int main(int argc, char** argv)
     else {
         
         Args[LsccArg::i] = argv[1];
+        WorkingDirectory = filesystem::path(Args[LsccArg::i]).parent_path();
 
         size_t in1 = in("-f", argv, argc);
         if (in1 != -1) {
@@ -203,33 +195,12 @@ int main(int argc, char** argv)
             exit(1);
         }
 
+        compilation c;
+        c = compile_file(Args[LsccArg::i], section_text, c);
+
         vector<token> tokens = tokenize(Args[LsccArg::i]);
-
-        check_pcllibs(tokens);
-
-        precompilation clib;
-        vector<token> tokenlibs;
-        if (pcllibs.size() > 0) {
-            for (size_t i = 0; i < pcllibs.size(); i++) {
-                tokenlibs.clear();
-                tokenlibs = tokenize(pcllibs[i]);
-                fuse_symbols(&tokenlibs);
-                identify_tokens(&tokenlibs, true);
-                clib.precompile_lib(tokenlibs);
-            }
-
-            if (clib.operatorslib.size() > 0) {
-                for (size_t i = 0; i < clib.operatorslib.size(); i++) {
-                    operators.push_back(clib.operatorslib[i]);
-                }
-            }
-        }
-
         fuse_symbols(&tokens);
         identify_tokens(&tokens);
-        check_externs(tokens);
-        check_includes(tokens);
-
         if (in("start", get_functions_name(tokens))) {
             if (Args[LsccArg::f] == "win64" || Args[LsccArg::f] == "win32") {
                 section_text += "\
@@ -241,51 +212,13 @@ WinMain:\n\
             }
         }
 
-        // compiling includes
-
-        for (string& e : includes_f) {
-            if (e.size() <= 1) continue;
-            compilation c;
-            string ne = e.substr(1, e.size()-2);
-            filesystem::path fileOption1 = (filesystem::current_path() / filesystem::path(ne));
-            filesystem::path fileOption2 = (filesystem::path(Args[LsccArg::i]).parent_path() / filesystem::path(ne));
-            vector<token> i_tokens;
-            if (filesystem::exists(fileOption1)) {
-                i_tokens = tokenize(fileOption1.string());
-            } 
-            else {
-                i_tokens = tokenize(fileOption2.string());
-            }
-
-            check_pcllibs(i_tokens);
-            fuse_symbols(&i_tokens);
-            identify_tokens(&i_tokens);
-            check_externs(i_tokens);
-            check_includes(i_tokens); // not recussive yet
-            vector<int> functions = get_functions(i_tokens);
-            sort(functions.begin(), functions.end());
-            functions.erase(unique(functions.begin(), functions.end()), functions.end());
-            for (int f : functions) {
-                section_text += c.compile_function(f, tokens);
-            }
-        }
-
         for (constant& e : externs) {
             section_text += "extern " + e.name + "\n";
         }
 
-        compilation c;
-        vector<int> functions = get_functions(tokens);
-        sort(functions.begin(), functions.end());
-        functions.erase(unique(functions.begin(), functions.end()), functions.end());
-
-        for (int f : functions) {
-            section_text += c.compile_function(f, tokens);
-        }
-
         string code = section_text + section_data;
 
-        cout << code << endl;
+        //cout << code << endl;
 
         ofstream asFile(string(afile).c_str());
 
@@ -295,7 +228,7 @@ WinMain:\n\
 
         system(string("nasm " + afile + " -f " + Args[LsccArg::f] + " -o " + Args[LsccArg::o]).c_str());
 
-        if (!save) {
+        if (Args[LsccArg::s] == "") {
             remove(afile.c_str());
         }
 

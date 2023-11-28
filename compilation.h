@@ -1,7 +1,6 @@
 #pragma once
 #include "token.h"
 #include <algorithm>
-#include "Error.h"
 using namespace std;
 
 class condition {
@@ -24,11 +23,8 @@ class compilation
 private:
     int stack = 0;
     int ident = 2;
-    int L = -1;
-    stringstream code;
-    vector<constant> constants;
     vector<condition> conditions;
-    vector<string> labels;
+    vector<constant> extConstants;
     bool check_condi(vector<token> line, vector<token> _tokens, int* counter, bool isincondi);
     int exec_condi(vector<token> line, vector<token> _tokens, string name, int _i, bool multiline);
     void register_condi(vector<token> line);
@@ -43,7 +39,15 @@ private:
     string interpret_and_compile(vector<token>& _tokens);
     Tokentypes detect_constant_type(token tok, vector<token>& line);
 public:
+    int L = -1;
+    stringstream code;
+    vector<constant> constants;
+    vector<string> labels;
+    compilation() {};
+    compilation(compilation& c);
+    compilation operator =(const compilation& nc);
     string compile_function(int function_start, vector<token>& _tokens);
+    void add_external_constant(constant c);
 };
 
 class precompilation
@@ -60,12 +64,6 @@ public:
     string precompile_lib(vector<token>& _tokens);
 };
 
-void check_externs(vector<token> tokens);
-void check_includes(vector<token> tokens);
-void check_pcllibs(vector<token> tokens);
-vector<int> get_functions(vector<token> tokens);
-vector<string> get_functions_name(vector<token> tokens);
-
 extern vector<string> REG;
 extern int ROspaces;
 extern vector<constant> spaces;
@@ -74,6 +72,14 @@ extern vector<constant> externs;
 extern vector<string> includes_f;
 extern vector<string> pcllibs;
 extern vector<int> argument_order;
+extern filesystem::path WorkingDirectory;
+
+compilation compile_file(string file, string& section_text, compilation c);
+void check_externs(vector<token> tokens);
+void check_includes(vector<token> tokens, vector<string>& include_f = includes_f);
+void check_pcllibs(vector<token> tokens);
+vector<int> get_functions(vector<token> tokens);
+vector<string> get_functions_name(vector<token> tokens);
 
 vector<constant> browse_parameters(vector<token>& tokens);
 bool is_int(token t);
