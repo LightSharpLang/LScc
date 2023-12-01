@@ -2,7 +2,7 @@
 with "stdlang.pclslib"
 
 "using extern constant printf"
-extern printf
+extern printf(str)
 
 def start(i):
   "comment"
