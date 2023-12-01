@@ -1,8 +1,3 @@
-"note that this file doesn't compile, the issue will be found and fixed! thank you"
-"this demo file has a lot of warnings due to the demonstration os the language's capability"
-"you can remove the types warnings with --w-type"
-"demo file - not usable"
-
 "using precompiled library"
 with "stdlang.pclslib"
 
