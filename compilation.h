@@ -3,6 +3,13 @@
 #include <algorithm>
 using namespace std;
 
+enum class CallingConvention {
+    SysVi386,
+    SysV,
+    M64,
+    cdelc
+};
+
 class condition {
 public:
     string name = "";
@@ -30,7 +37,7 @@ private:
     void register_condi(vector<token> line);
     constant* get_registered_constant(string t);
     size_t is_registered_constant(string t);
-    vector<constant> browse_argument(vector<token>& tokens);
+    vector<constant> browse_argument(vector<token>& tokens, bool ignoreConstantError = false);
     void register_function(vector<token> tokens);
     void compile_operation(vector<token>& _tokens);
     string get_reg();
@@ -73,6 +80,8 @@ extern vector<string> includes_f;
 extern vector<string> pcllibs;
 extern vector<int> argument_order;
 extern filesystem::path WorkingDirectory;
+extern CallingConvention convention;
+extern int architecture;
 
 compilation compile_file(string file, string& section_text, compilation c);
 void check_externs(vector<token> tokens);

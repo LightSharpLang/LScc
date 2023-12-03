@@ -67,7 +67,7 @@ compilation compile_file(string file, string& section_text, compilation c) {
 
 void check_externs(vector<token> tokens) {
     /* checking for external functions / variables
-    
+
     an extern is always following this order:
     extern  [constant] ( ) = function
     token 1 [token 2]  3 4
@@ -75,7 +75,7 @@ void check_externs(vector<token> tokens) {
     extern  [constant] = variable
     token 1 [token2]
 
-    
+
     so we need to identify the token of type Tokentypes::extern and register the following token
     */
     bool next_e = false;
@@ -147,7 +147,7 @@ size_t compilation::is_registered_constant(string t) {
 
 }
 
-vector<constant> compilation::browse_argument(vector<token>& tokens) {
+vector<constant> compilation::browse_argument(vector<token>& tokens, bool ignoreConstantError) {
     /*
     This function returns the arguments of a function:
     foo(1, "hello world", i)
@@ -187,11 +187,23 @@ vector<constant> compilation::browse_argument(vector<token>& tokens) {
             elif(is_list(tokens[i])) arguments.push_back(constant(tokens[i].t, Tokentypes::ptr, "", Basetype::_ptr));
             elif(tokens[i].type == Tokentypes::_constant) {
                 constant* consta = get_registered_constant(tokens[i].t);
-                if (consta == (constant*)((void*)0)) {
-                    cout << Error::errorTypeError << "Error" << Error::errorTypeNormal << " at line " << tokens[i].line << ": constant '" + tokens[i].t + "' used but not defined!" << endl;
-                    exit(1);
+                if (ignoreConstantError == false) {
+                    if (consta == (constant*)((void*)0)) {
+                        cout << Error::errorTypeError << "Error" << Error::errorTypeNormal << " at line " << tokens[i].line << ": constant '" + tokens[i].t + "' used but not defined!" << endl;
+                        exit(1);
+                    }
+                    else {
+                        arguments.push_back(*consta);
+                    }
                 }
-                arguments.push_back(*consta);
+                else {
+                    if (consta == (constant*)((void*)0)) {
+                        arguments.push_back(constant(tokens[i].t, Tokentypes::_constant, "", Basetype::_ptr));
+                    }
+                    else {
+                        arguments.push_back(*consta);
+                    }
+                }
             }
         }
 
@@ -319,7 +331,6 @@ Tokentypes compilation::detect_constant_type(token tok, vector<token>& line) {
                 return Tokentypes::ptr;
             }
             if (line[i + 1].type == Tokentypes::parameter_start) return Tokentypes::function;
-            warn(Error::typeWarn, line[0].line, stringstream() << "assuming constant type of '" << line[i].t << "' as variable: type not specified");
             return Tokentypes::variable;
         }
     }
@@ -331,8 +342,11 @@ Tokentypes compilation::detect_constant_type(token tok, vector<token>& line) {
 void compilation::register_function(vector<token> tokens) {
     vector<int> function = get_functions(tokens);
     constants.push_back(constant("return", Tokentypes::function, "", Basetype::_any));
-    constants.push_back(constant("nothing", Tokentypes::function, "", Basetype::_any));
     constants.push_back(constant("int", Tokentypes::function, "", Basetype::_any));
+    constants.push_back(constant("fix", Tokentypes::function, "", Basetype::_any));
+    constants.push_back(constant("unsign", Tokentypes::function, "", Basetype::_any));
+    constants.push_back(constant("sign", Tokentypes::function, "", Basetype::_any));
+    constants.push_back(constant("is", Tokentypes::function, "", Basetype::_any));
     constants.push_back(constant("syscall", Tokentypes::function, "", Basetype::_any));
     constants.push_back(constant("nop", Tokentypes::function, "", Basetype::_any));
     constants.push_back(constant("label", Tokentypes::function, "", Basetype::_any));
@@ -600,8 +614,14 @@ string compilation::interpret_and_compile_var(vector<token>& _tokens) {
                         type = getType(_tokens[0]);
                     }
                     if (type != constants[consta].lastUse) {
-                        warn(Error::typeWarn, _tokens[0].line, stringstream() << "changing type of variable \"" << constants[consta].name << "\" from " << fromType(constants[consta].lastUse) << " to " << fromType(type) << "!");
-                        constants[consta].lastUse = type;
+                        if (constants[consta].fixedType == false) {
+                            warn(Error::typeWarn, _tokens[0].line, stringstream() << "changing type of variable \"" << constants[consta].name << "\" from " << fromType(constants[consta].lastUse) << " to " << fromType(type) << "!");
+                            constants[consta].lastUse = type;
+                        }
+                        else {
+                            cout << Error::errorTypeError << "Error at line " << Error::errorTypeNormal << _tokens[0].line << " Cannot change type of fix(" << constants[consta].name << ") from " << fromType(constants[consta].lastUse) << " to " << fromType(type) << "!" << endl;
+                            exit(1);
+                        }
                     }
                     if (value != constants[consta].reg) {
                         if (type == Basetype::_float) {
@@ -621,8 +641,15 @@ string compilation::interpret_and_compile_var(vector<token>& _tokens) {
                         type = getType(_tokens[0]);
                     }
                     if (type != constants[consta].lastUse) {
-                        warn(Error::typeWarn, _tokens[0].line, stringstream() << "changing type of variable \"" << constants[consta].name << "\" from " << fromType(constants[consta].lastUse) << " to " << fromType(type) << "!");
-                        constants[consta].lastUse = type;
+                        if (constants[consta].fixedType == false) {
+                            warn(Error::typeWarn, _tokens[0].line, stringstream() << "changing type of variable \"" << constants[consta].name << "\" from " << fromType(constants[consta].lastUse) << " to " << fromType(type) << "!");
+                            constants[consta].lastUse = type;
+                        }
+                        else {
+                            cout << Error::errorTypeError << "Error at line " << Error::errorTypeNormal << _tokens[0].line << " Cannot change type of fixed " << constants[consta].name << "from " << fromType(constants[consta].lastUse) << " to " << fromType(type) << "!" << endl;
+                            exit(1);
+                        }
+
                     }
                     if (in(constants[consta].name, REG)) {
                         code << string(ident, ' ') << "mov " << REG[0] << ", " << value << endl;
@@ -687,8 +714,10 @@ string compilation::interpret_and_compile(vector<token>& _tokens) {
                         break;
                     }
                     else {
-                        cout << Error::errorTypeError << "Error at line " << Error::errorTypeNormal << _tokens[i].line << ": function " << _tokens[i].t << " called but not created";
-                        exit(1);
+                        if (detect_constant_type(_tokens[i], _tokens) == Tokentypes::function) {
+                            cout << Error::errorTypeError << "Error" << " at line " << Error::errorTypeNormal << _tokens[i].line << ": function " << _tokens[i].t << " called but not created";
+                            exit(1);
+                        }
                     }
                 }
                 else {
@@ -699,8 +728,8 @@ string compilation::interpret_and_compile(vector<token>& _tokens) {
         }
     }
     if (fname != "") {
-        vector<constant> parameters = browse_argument(_tokens);
         if (fname == "return") {
+            vector<constant> parameters = browse_argument(_tokens);
             if (parameters.size() > 0) {
                 if (parameters[0].reg != "") {
                     code << string(ident, ' ') << "mov " << REG[7] << ", " << REG[6] << endl;
@@ -723,26 +752,95 @@ string compilation::interpret_and_compile(vector<token>& _tokens) {
             code << string(ident, ' ') << "nop" << endl;
         }
         elif(fname == "int") {
+            vector<constant> parameters = browse_argument(_tokens);
             if (parameters[0].reg != "") code << string(ident, ' ') << "int " << parameters[0].reg << endl;
             else code << string(ident, ' ') << "int " << parameters[0].name << endl;
+        }
+        elif(fname == "fix") {
+            vector<constant> parameters = browse_argument(_tokens);
+            for (int i = 0; i < parameters.size(); i++) {
+                constant* c = &constants[is_registered_constant(parameters[i].name)];
+                if (c != nullptr) {
+                    c->fixedType = true;
+                }
+                else {
+                    cout << Error::errorTypeError << "Error at line: " << _tokens[0].line << Error::errorTypeNormal << " Cannot fix the type of \"" << parameters[i].name << "\"!" << endl;
+                }
+            }
+        }
+        elif(fname == "unsign") {
+            vector<constant> parameters = browse_argument(_tokens);
+            for (int i = 0; i < parameters.size(); i++) {
+                constant* c = &constants[is_registered_constant(parameters[i].name)];
+                if (c != nullptr) {
+                    if (c->fixedType == false) {
+                        c->isUnsigned = true;
+                    }
+                    else {
+                        cout << Error::errorTypeError << "Error at line " << Error::errorTypeNormal << _tokens[0].line << " Cannot change type of fix(" << c->name << ")" << " to unsigned !" << endl;
+                        exit(1);
+                    }
+                }
+                else {
+                    cout << Error::errorTypeError << "Error at line: " << _tokens[0].line << Error::errorTypeNormal << " Cannot fix the type of \"" << parameters[i].name << "\"!" << endl;
+                }
+            }
+        }
+        elif(fname == "sign") {
+            vector<constant> parameters = browse_argument(_tokens);
+            for (int i = 0; i < parameters.size(); i++) {
+                constant* c = &constants[is_registered_constant(parameters[i].name)];
+                if (c != nullptr) {
+                    if (c->fixedType == false) {
+                        c->isUnsigned = false;
+                    }
+                    else {
+                        cout << Error::errorTypeError << "Error at line " << Error::errorTypeNormal << _tokens[0].line << " Cannot change type of fix(" << c->name << ")" << " to signed !" << endl;
+                        exit(1);
+                    }
+                }
+                else {
+                    cout << Error::errorTypeError << "Error at line: " << _tokens[0].line << Error::errorTypeNormal << " Cannot fix the type of \"" << parameters[i].name << "\"!" << endl;
+                }
+            }
+        }
+        elif(fname == "is") {
+            vector<constant> parameters = browse_argument(_tokens, true);
+            if (parameters[0].name == "UNSIGNED") {
+                constant* c = &constants[is_registered_constant(parameters[1].name)];
+                if (c != nullptr) {
+                    code << string(ident, ' ') << "mov " << REG[0] << ", " << (c->isUnsigned) << endl;
+                }
+                else {
+                    cout << Error::errorTypeError << "Error at line: " << _tokens[0].line << Error::errorTypeNormal << " Cannot get attribute of \"" << parameters[1].name << "\"!" << endl;
+                }
+            }
+            elif(parameters[0].name == "SIGNED") {
+                constant* c = &constants[is_registered_constant(parameters[1].name)];
+                if (c != nullptr) {
+                    code << string(ident, ' ') << "mov " << REG[0] << ", " << (!c->isUnsigned) << endl;
+                }
+                else {
+                    cout << Error::errorTypeError << "Error at line: " << _tokens[0].line << Error::errorTypeNormal << " Cannot get attribute of \"" << parameters[1].name << "\"!" << endl;
+                }
+            }
+            else {
+                cout << Error::errorTypeError << "Error at line: " << _tokens[0].line << Error::errorTypeNormal << " Invalid attrubute \"" << parameters[0].name << "\" !" << endl;
+            }
         }
         elif(fname == "syscall") {
             code << string(ident, ' ') << "syscall" << endl;
         }
         elif(fname == "label") {
+            vector<constant> parameters = browse_argument(_tokens, true);
             code << "." << parameters[0].name << ":" << endl;
-            this->labels.push_back(parameters[0].name);
         }
         elif(fname == "goto") {
-            if (in(parameters[0].name, this->labels)) {
-                code << string(ident, ' ') << "jmp ." << parameters[0].name << endl;
-            }
-            else {
-                cout << Error::errorTypeError << "Error" << " at line " << Error::errorTypeNormal << _tokens[0].line << ": label \"" << parameters[0].name << "\" does not exist!" << endl;
-                exit(1);
-            }
+            vector<constant> parameters = browse_argument(_tokens, true);
+            code << string(ident, ' ') << "jmp ." << parameters[0].name << endl;
         }
         else {
+            vector<constant> parameters = browse_argument(_tokens);
             reverse(parameters.begin(), parameters.end());
             size_t p_num = -1;
             for (constant i : parameters) {
@@ -753,12 +851,15 @@ string compilation::interpret_and_compile(vector<token>& _tokens) {
                     else code << string(ident, ' ') << "mov " << REG[argument_order[p_num]] << ", " << i.name << "\n";
                 }
                 else {
-                    if (i.reg != "") code << string(ident, ' ') << "push " << i.reg << "\n";
+                    if (i.reg != "") code << string(ident, ' ') << "push qword " << i.reg << "\n";
                     else code << string(ident, ' ') << "push " << i.name << "\n";
                 }
             }
             code << string(ident, ' ') << "xor " << REG[0] << ", " << REG[0] << endl;
             code << string(ident, ' ') << "call " << fname << endl;
+            if (convention == CallingConvention::cdelc) {
+                code << string(ident, ' ') << "add " << REG[7] << ", " << 8 * parameters.size() << endl;
+            }
         }
     }
 
@@ -787,6 +888,13 @@ bool replace(std::string& str, const std::string& from, const std::string& to) {
         }
     }
     return replaced;
+}
+
+void compilation::add_external_constant(constant c) {
+    if (c.type == Tokentypes::function || c.type == Tokentypes::global_variable) {
+        if (is_registered_constant(c.name) == -1)
+            extConstants.push_back(c);
+    }
 }
 
 void compilation::compile_operation(vector<token>& _tokens) {
@@ -910,7 +1018,7 @@ void compilation::compile_operation(vector<token>& _tokens) {
             }
 
             if (ope.name == "") {
-                cout << Error::errorTypeError << "Error" << Error::errorTypeNormal << " could not find any operators for types " << fromType(one.lastUse) << " and " << fromType(two.lastUse) << "!" << endl;
+                cout << Error::errorTypeError << "Error at line:" << _tokens[0].line << Error::errorTypeNormal << " could not find any operators for types " << fromType(one.lastUse) << " and " << fromType(two.lastUse) << "!" << endl;
                 exit(1);
             }
 
@@ -1039,16 +1147,20 @@ string compilation::compile_function(int function_start, vector<token>& _tokens)
         if (tokens[i].type == Tokentypes::_constant && tokens[i - 1].type == Tokentypes::definition) {
             name = tokens[i].t;
             code.str("");
-            code << "GLOBAL " << name << "\n" << name << ":\n  push " << REG[6] << "\n  mov " << REG[6] << ", " << REG[7] << "\n";
+
+            code << "GLOBAL " << name << endl;
+            code << name << ":" << endl;
+            code << "  push " << REG[6] << endl;
+            code << "  mov " << REG[6] << ", " << REG[7] << endl;
         }
         if (tokens[i].type == Tokentypes::_constant && parenthesis) {
             if (tokens[i - 1].type == Tokentypes::type) {
-                code << string(ident, ' ') << "mov qword [" << REG[6] << " - " << to_string(this->stack) << "], " << REG[argument_order[i]] << "\n";
+                code << string(ident, ' ') << "mov qword [" << REG[6] << " - " << to_string(this->stack) << "], " << REG[argument_order[this->stack / 8]] << "\n";
                 constants.push_back(constant(tokens[i].t, Tokentypes::variable, "[" + REG[6] + " - " + to_string(8 * (i + 1)) + "]", getType(tokens[i - 1])));
                 this->stack += 8;
             }
             else {
-                code << string(ident, ' ') << "mov qword [" << REG[6] << " - " << to_string(this->stack) << "], " << REG[argument_order[i]] << "\n";
+                code << string(ident, ' ') << "mov qword [" << REG[6] << " - " << to_string(this->stack) << "], " << REG[argument_order[this->stack / 8]] << "\n";
                 constants.push_back(constant(tokens[i].t, Tokentypes::variable, "[" + REG[6] + " - " + to_string(8 * (i + 1)) + "]", Basetype::_any));
                 this->stack += 8;
             }
@@ -1079,13 +1191,6 @@ string compilation::compile_function(int function_start, vector<token>& _tokens)
         elif(!is_first_line) line.push_back(tokens[i]);
     }
     return code.str();
-}
-
-void compilation::add_external_constant(constant c) {
-    if (c.type == Tokentypes::function || c.type == Tokentypes::global_variable) {
-        if (is_registered_constant(c.name) == -1)
-            extConstants.push_back(c);
-    }
 }
 
 vector<int> get_functions(vector<token> tokens) {

@@ -82,6 +82,7 @@ public:
     Basetype lastUse;
     bool fixedType = false;
     bool inCondition = false;
+    bool isUnsigned = false;
     constant() {};
     constant(string str, Tokentypes _type, string _reg, Basetype _Type) {
         name = str;

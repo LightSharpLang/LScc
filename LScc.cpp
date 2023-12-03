@@ -7,9 +7,17 @@
 /*
 todo:
 
-fixed types
+add fix() to the doc
+change =_ and !_ in the doc
 
-signed unsigned (£ = unsigned)
+add unsign() sign() in the doc
+
+add
+is(UNSIGNED, var)
+is(SIGNED, var)
+
+in the doc
+
 
 type child token(type...)
 
@@ -56,8 +64,8 @@ map < string, Tokentypes > tokens_dict = {
     { "=", Tokentypes::equal },
     { "==", Tokentypes::je },
     { "!=" , Tokentypes::jne },
-    { "=_", Tokentypes::jz },
-    { "!_", Tokentypes::jnz },
+    { "=True", Tokentypes::jz },
+    { "=False", Tokentypes::jnz },
     { ">", Tokentypes::jg },
     { "!>", Tokentypes::jng},
     { ">=", Tokentypes::jge },
@@ -67,7 +75,7 @@ map < string, Tokentypes > tokens_dict = {
     { "<=", Tokentypes::jle },
     { "!<=", Tokentypes::jnle },
     { "!", Tokentypes::inv }
-    };
+};
 
 int ROspaces = 0;
 string section_data = "SECTION .data:\n";
@@ -79,13 +87,10 @@ vector<coperator> operators;
 vector<constant> externs;
 vector<string> includes_f;
 vector<string> pcllibs;
+CallingConvention convention;
+int architecture = 64;
 
-map<LsccArg, string> Args{
-    {LsccArg::i, "" },
-    {LsccArg::o, "" },
-    {LsccArg::f, "" },
-    {LsccArg::cc, "" },
-};
+map<LsccArg, string> Args {};
 
 filesystem::path WorkingDirectory;
 
@@ -94,7 +99,7 @@ int main(int argc, char** argv)
     string afile;
     if (argc == 1) {
         cout << Error::errorTypeError << "LScc: fatal: no input file specified" << endl << Error::errorTypeNormal
-    << "\
+            << "\
     Usage: LScc [file] [options...]                                             \n\
                                                                         \n\
     Options :                                                           \n\
@@ -109,7 +114,7 @@ int main(int argc, char** argv)
     --w-type    disable type convertion warnings                        \n";
     }
     else {
-        
+
         Args[LsccArg::i] = argv[1];
         WorkingDirectory = filesystem::path(Args[LsccArg::i]).parent_path();
 
@@ -152,17 +157,17 @@ int main(int argc, char** argv)
             Args[LsccArg::s] = "1";
         }
 
+        in1 = in("-p", argv, argc);
+        if (in1 != -1) {
+            Args[LsccArg::p] = "1";
+        }
+        
         in1 = in("-cc", argv, argc);
         if (in1 != -1) {
             Args[LsccArg::cc] = argv[in1 + 1];
         }
         else {
-            if (getenv("windir") != NULL) {
-                Args[LsccArg::cc] = "M64";
-            }
-            else {
-                Args[LsccArg::cc] = "SysV";
-            }
+            Args[LsccArg::cc] = "cdecl";
         }
 
         in1 = in("--w-type", argv, argc);
@@ -171,10 +176,12 @@ int main(int argc, char** argv)
         }
 
         if (Args[LsccArg::f] == "elf64" || Args[LsccArg::f] == "win64") {
+            architecture = 64;
             REG.insert(REG.end(), { "rax", "rbx", "rcx", "rdx", "rsi", "rdi", "rbp", "rsp", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15", "xmm0", "xmm1", "xmm2", "xmm3", "eax", "ebx", "ecx", "edx", "esi", "edi", "ebp", "esp", "r8d", "r9d", "r10d", "r11d", "r12d", "r13d", "r14d", "r15d", "cr0", "cr2", "cr3", "cr4", "cr8" });
         }
         elif(Args[LsccArg::f] == "elf32" || Args[LsccArg::f] == "win32" || Args[LsccArg::f] == "elfx32") {
-            REG.insert(REG.end(), { "eax", "ebx", "ecx", "edx", "esi", "edi", "ebp", "esp", "r8d", "r9d", "r10d", "r11d", "r12d", "r13d", "r14d", "r15d", "cr0", "cr2", "cr3", "cr4", "cr8"});
+            architecture = 32; 
+            REG.insert(REG.end(), { "eax", "ebx", "ecx", "edx", "esi", "edi", "ebp", "esp", "r8d", "r9d", "r10d", "r11d", "r12d", "r13d", "r14d", "r15d", "cr0", "cr2", "cr3", "cr4", "cr8" });
         }
         else {
             cout << "Error: invalid format \"" << Args[LsccArg::f] << "\" !" << endl;
@@ -183,12 +190,19 @@ int main(int argc, char** argv)
 
         if (Args[LsccArg::cc] == "M64") {
             argument_order.insert(argument_order.end(), { 2, 3, 8, 9 });
+            convention = CallingConvention::M64;
         }
         elif(Args[LsccArg::cc] == "SysV") {
             argument_order.insert(argument_order.end(), { 5, 4, 3, 2, 8, 9 });
+            convention = CallingConvention::SysV;
         }
         elif(Args[LsccArg::cc] == "SysVi386") {
             argument_order.clear();
+            convention = CallingConvention::SysVi386;
+        }
+        elif(Args[LsccArg::cc] == "cdecl") {
+            argument_order.clear();
+            convention = CallingConvention::cdelc;
         }
         else {
             cout << "Error: invalid calling convention \"" << Args[LsccArg::cc] << "\" !" << endl;
@@ -218,18 +232,29 @@ WinMain:\n\
 
         string code = section_text + section_data;
 
-        //cout << code << endl;
+        if (Args[LsccArg::p] == "") {
+            cout << code << endl;
+        }
 
-        ofstream asFile(string(afile).c_str());
+        ifstream file(Args[LsccArg::i]);
+        ostringstream originalContent;
+        originalContent << file.rdbuf();
+        file.close();
 
+        ofstream asFile(Args[LsccArg::i]);
         asFile << code;
-
         asFile.close();
 
-        system(string("nasm " + afile + " -f " + Args[LsccArg::f] + " -o " + Args[LsccArg::o]).c_str());
+        system(string("nasm " + Args[LsccArg::i] + " -f " + Args[LsccArg::f] + " -o " + Args[LsccArg::o]).c_str());
 
-        if (Args[LsccArg::s] == "") {
-            remove(afile.c_str());
+        asFile.open(Args[LsccArg::i]);
+        asFile << originalContent.str();
+        asFile.close();
+
+        if (Args[LsccArg::s] == "1") {
+            asFile.open(afile);
+            asFile << code;
+            asFile.close();
         }
 
         cout << Error::errorTypeValid << "Successfully compiled \x1B[33m\"" << Args[LsccArg::i] << "\"\x1B[32m !" << Error::errorTypeNormal << endl;

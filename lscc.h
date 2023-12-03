@@ -13,5 +13,6 @@ enum class LsccArg {
     cc,
     f,
     n,
-    s
+    s,
+    p
 };
