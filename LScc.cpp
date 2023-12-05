@@ -7,25 +7,24 @@
 /*
 todo:
 
-add fix() to the doc
-change =_ and !_ in the doc
-
-add unsign() sign() in the doc
-
-add
-is(UNSIGNED, var)
-is(SIGNED, var)
-
-in the doc
+add $! to wiki
 
 
-type child token(type...)
+precompiled {
+    type child token(type...)
+    def foo():
+}
+
+LS operators
+
+LS childs
 
 struct token
 
-typedef token1 token2
-
 preprocessors
+
+evaluate functions
+edef foo():
 
 */
 
@@ -74,7 +73,7 @@ map < string, Tokentypes > tokens_dict = {
     { "!<", Tokentypes::jnl },
     { "<=", Tokentypes::jle },
     { "!<=", Tokentypes::jnle },
-    { "!", Tokentypes::inv }
+    { "$!", Tokentypes::inv }
 };
 
 int ROspaces = 0;
@@ -90,7 +89,16 @@ vector<string> pcllibs;
 CallingConvention convention;
 int architecture = 64;
 
-map<LsccArg, string> Args {};
+map<LsccArg, string> Args {
+    {LsccArg::cc, ""},
+    {LsccArg::f, ""},
+    {LsccArg::i, ""},
+    {LsccArg::n, ""},
+    {LsccArg::none, ""},
+    {LsccArg::o, ""},
+    {LsccArg::p, ""},
+    {LsccArg::s, ""}
+};
 
 filesystem::path WorkingDirectory;
 
@@ -167,7 +175,7 @@ int main(int argc, char** argv)
             Args[LsccArg::cc] = argv[in1 + 1];
         }
         else {
-            Args[LsccArg::cc] = "cdecl";
+            Args[LsccArg::cc] = "M64";
         }
 
         in1 = in("--w-type", argv, argc);
@@ -201,7 +209,7 @@ int main(int argc, char** argv)
             convention = CallingConvention::SysVi386;
         }
         elif(Args[LsccArg::cc] == "cdecl") {
-            argument_order.clear();
+            argument_order.insert(argument_order.end(), { 2, 3, 8, 9 });
             convention = CallingConvention::cdelc;
         }
         else {
@@ -224,6 +232,13 @@ WinMain:\n\
   ret\n\
 \n";
             }
+        } else {
+            section_text += "\
+GLOBAL _main\n\
+_main:\n\
+  call start\n\
+  ret\n\
+\n";
         }
 
         for (constant& e : externs) {
@@ -232,7 +247,7 @@ WinMain:\n\
 
         string code = section_text + section_data;
 
-        if (Args[LsccArg::p] == "") {
+        if (Args[LsccArg::p] == "1") {
             cout << code << endl;
         }
 
