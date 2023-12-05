@@ -1,5 +1,6 @@
 #pragma once
 #include "token.h"
+#include "escString.h"
 #include <algorithm>
 using namespace std;
 
@@ -29,11 +30,13 @@ class compilation
 {
 private:
     int stack = 0;
-    int ident = 2;
+    stringstream conditionCode;
     vector<condition> conditions;
     vector<constant> extConstants;
+    string currentFname;
+    void swap();
     bool check_condi(vector<token> line, vector<token> _tokens, int* counter, bool isincondi);
-    int exec_condi(vector<token> line, vector<token> _tokens, string name, int _i, bool multiline);
+    int exec_condi(vector<token> line, vector<token> _tokens, string name, int _i, bool multiline, bool inverted);
     void register_condi(vector<token> line);
     constant* get_registered_constant(string t);
     size_t is_registered_constant(string t);
@@ -45,6 +48,7 @@ private:
     string interpret_and_compile_var(vector<token>& _tokens);
     string interpret_and_compile(vector<token>& _tokens);
     Tokentypes detect_constant_type(token tok, vector<token>& line);
+    void getStack(vector<token>& _tokens);
 public:
     int L = -1;
     stringstream code;

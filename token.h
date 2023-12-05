@@ -101,6 +101,14 @@ struct coperator {
     string fcode(int ident);
 };
 
+struct cchild {
+    std::string name;
+    vector<constant> parameters;
+    std::string code;
+    Basetype type;
+    string fcode(int ident);
+};
+
 class token
 {
 public:
