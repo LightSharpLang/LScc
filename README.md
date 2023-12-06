@@ -8,6 +8,18 @@ The L# Classic Compiler (LSCC) project was originally started by Julian Lavis--F
 The full documentation is in the wiki linked to the project:
 <a href="https://github.com/LightSharpLang/LScc/wiki/">https://github.com/LightSharpLang/LScc/wiki/</a>
 
+## compiling
+
+Linux:
+```
+python make.py install latest
+```
+
+Windows:
+```
+python wmake.py install latest
+```
+
 ### Known Issues:
 
 ## Demo
