@@ -10,6 +10,7 @@ The full documentation is in the wiki linked to the project:
 
 ## compiling
 
+### latest
 Linux:
 ```
 python make.py install latest
@@ -18,6 +19,28 @@ python make.py install latest
 Windows:
 ```
 python wmake.py install latest
+```
+
+### current
+Linux:
+```
+python make.py install
+```
+
+Windows:
+```
+python wmake.py install
+```
+
+### specific
+Linux:
+```
+python make.py install vX.X-...
+```
+
+Windows:
+```
+python wmake.py install vX.X-...
 ```
 
 ### Known Issues:
