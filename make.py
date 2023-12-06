@@ -36,6 +36,7 @@ if argv[1].lower() == "install":
     print("removing sources...")
     rmdir("../"+dir)
     print("done")
+    print("now put nasm into", os.curdir)
   else:
     print("installing current")
     cmd(["g++", "token.cpp", "compilation.cpp", "LScc.cpp", "Error.cpp", "escString.cpp", "-o", "lscc", "--std=c++17"])
