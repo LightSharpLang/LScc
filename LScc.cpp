@@ -8,11 +8,6 @@
 /*
 todo:
 
-precompiled {
-    type child token(type...)
-    def foo():
-}
-
 LS operators
 
 LS childs
