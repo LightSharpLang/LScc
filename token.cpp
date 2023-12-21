@@ -307,3 +307,23 @@ string coperator::fcode(int ident) {
     
     return c.str();
 }
+
+string cchild::fcode(int ident) {
+    vector<token> tokens = tokenize(code, true);
+    identify_tokens(&tokens);
+
+    stringstream c;
+
+    Tokentypes prev = Tokentypes::lf;
+    for (token t : tokens) {
+        if (prev == Tokentypes::lf) {
+            c << string(ident, ' ') << t.t;
+        }
+        else {
+            c << " " << t.t;
+        }
+        prev = t.type;
+    }
+
+    return c.str();
+}

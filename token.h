@@ -24,6 +24,7 @@ enum class Basetype {
 enum class Tokentypes {
     null = 0,
     definition,
+    mold_definition,
     end,
     condition,
     condition_exec,
@@ -96,6 +97,7 @@ public:
 struct coperator {
     std::string name;
     vector<constant> parameters;
+    bool isPrecompiled = false;
     std::string code;
     Basetype type;
     string fcode(int ident);
@@ -104,6 +106,7 @@ struct coperator {
 struct cchild {
     std::string name;
     vector<constant> parameters;
+    bool isPrecompiled = false;
     std::string code;
     Basetype type;
     string fcode(int ident);
@@ -122,9 +125,19 @@ public:
     token(string str, int line, Tokentypes type);
 };
 
+struct mold {
+    std::string name;
+    vector<constant> parameters;
+    bool isPrecompiled = false;
+    vector<token> code;
+    Basetype type;
+    string fcode(int ident);
+};
+
 extern std::map < string, Basetype > type_dict;
 extern std::map < string, Tokentypes > tokens_dict;
 extern vector<coperator> operators;
+extern vector<cchild> childs;
 
 string fromType(Basetype t);
 Basetype getType(token t);

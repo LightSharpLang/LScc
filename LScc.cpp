@@ -4,11 +4,9 @@
 #else
 #error "compiler must be at c++17 to compile!"
 #endif
+
 /*
 todo:
-
-add $! to wiki
-
 
 precompiled {
     type child token(type...)
@@ -39,6 +37,7 @@ map < string, Basetype > type_dict = {
 
 map < string, Tokentypes > tokens_dict = {
     { "def", Tokentypes::definition },
+    { "mold", Tokentypes::mold_definition },
     { "end", Tokentypes::end },
     { "$", Tokentypes::condition },
     { "[", Tokentypes::list_start },
@@ -63,8 +62,8 @@ map < string, Tokentypes > tokens_dict = {
     { "=", Tokentypes::equal },
     { "==", Tokentypes::je },
     { "!=" , Tokentypes::jne },
-    { "=True", Tokentypes::jz },
-    { "=False", Tokentypes::jnz },
+    { "=True", Tokentypes::jnz },
+    { "=False", Tokentypes::jz },
     { ">", Tokentypes::jg },
     { "!>", Tokentypes::jng},
     { ">=", Tokentypes::jge },
@@ -83,6 +82,7 @@ vector<int> argument_order;
 vector<string> REG;
 vector<constant> spaces;
 vector<coperator> operators;
+vector<cchild> childs;
 vector<constant> externs;
 vector<string> includes_f;
 vector<string> pcllibs;
@@ -113,7 +113,7 @@ int main(int argc, char** argv)
     Options :                                                           \n\
     ----compilation options----                                         \n\
     -o    output file | default: input file.obj                         \n\
-    -cc   calling convention[SysVi386, SysV, M64]                       \n\
+    -cc   calling convention[SysVi386, SysV, M64, cdecl]                       \n\
     -f    format[elf32, elf64, elfx32, win32, win64]                    \n\
     -n    no start function                                             \n\
     -s    save asm file                                                 \n\
@@ -175,7 +175,7 @@ int main(int argc, char** argv)
             Args[LsccArg::cc] = argv[in1 + 1];
         }
         else {
-            Args[LsccArg::cc] = "M64";
+            Args[LsccArg::cc] = "cdecl";
         }
 
         in1 = in("--w-type", argv, argc);
@@ -223,7 +223,7 @@ int main(int argc, char** argv)
         vector<token> tokens = tokenize(Args[LsccArg::i]);
         fuse_symbols(&tokens);
         identify_tokens(&tokens);
-        if (in("start", get_functions_name(tokens))) {
+        if (in("start", get_functions_name(tokens)) != -1) {
             if (Args[LsccArg::f] == "win64" || Args[LsccArg::f] == "win32") {
                 section_text += "\
 GLOBAL WinMain\n\

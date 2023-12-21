@@ -66,10 +66,7 @@ class precompilation
 private:
 public:
     vector<coperator> operatorslib;
-    vector<string> childslib;
-    vector<string> childscodes;
-    vector<string> functionslib;
-    vector<string> functionscodes;
+    vector<cchild> childslib;
     bool is_operator(vector<token> _tokens, size_t index);
     bool is_child(vector<token> _tokens, size_t index);
     string precompile_lib(vector<token>& _tokens);
