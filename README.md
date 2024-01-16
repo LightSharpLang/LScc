@@ -46,6 +46,7 @@ python wmake.py install vX.X-...
 ### Known Issues:
 - floating points treated as child
 - condition not working with functions
+- Warning changing type of variable from any to int!
 
 ## Demo
 
