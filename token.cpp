@@ -9,6 +9,15 @@ token::token(string str, int _line, Tokentypes _type) {
     this->line = _line;
     this->type = _type;
 }
+token::token(const token& t) {
+    line = t.line;
+    this->t = t.t;
+    identified = t.identified;
+    type = t.type;
+    constant = t.constant;
+    next = t.next;
+    file = t.file;
+}
 
 bool in(string a, string b[], int len) {
     for (int i = 0; i < len; i++) {
@@ -28,7 +37,7 @@ size_t in(string a, char** b, int len) {
     }
     return -1;
 }
-size_t in(string a, vector<coperator> b) {
+size_t in(string a, vector<asoperator> b) {
     for (size_t i = 0; i < b.size(); i++) {
         if (a == b[i].name) return true;
     }
@@ -66,6 +75,8 @@ Basetype getType(token t) {
     return Basetype::_none;
 }
 
+string currentFile = "";
+
 void identify_tokens(vector<token>* tokens, bool is_lib) {
     int line = 1;
     bool nowarn = false;
@@ -74,6 +85,7 @@ void identify_tokens(vector<token>* tokens, bool is_lib) {
     for (int i = 0; i < tokens->size() - 1; i++) {
         tokens->at(i).line = line;
         tokens->at(i).next = &tokens->at(i + 1);
+        tokens->at(i).file = currentFile;
         if (tokens->at(i).t == "\n") {
             line += 1;
             is_comment = false;
@@ -109,7 +121,7 @@ void identify_tokens(vector<token>* tokens, bool is_lib) {
             }
             else {
                 cout << Error::errorTypeError << "Error" << Error::errorTypeNormal << " at line " << tokens->at(i).line << ", invalid syntax: '" << tokens->at(i).t << "'" << endl;
-                exit(1);
+                std::exit(1);
             }
         }
     }
@@ -209,7 +221,7 @@ vector<token> tokenize(string file, bool isstr) {
 
         if (!myfile.good()) {
             cout << Error::errorTypeError << "Error" << Error::errorTypeNormal << ", file  \"" << file << "\" does not exist!" << endl;
-            exit(1);
+            std::exit(1);
         }
         if (myfile.is_open())
         {
@@ -247,7 +259,7 @@ vector<token> tokenize(string file, bool isstr) {
         }
         else {
             cout << Error::errorTypeError << "Error" << Error::errorTypeNormal << ", cannot read file \"" << file << "\" !" << endl;
-            exit(1);
+            std::exit(1);
         }
     }
     else {
@@ -283,12 +295,13 @@ vector<token> tokenize(string file, bool isstr) {
             current_token = "";
         }
     }
+    tokens.push_back(token("\n"));
     fuse_string_litterals(&tokens);
     clean_tokens(&tokens);
     return tokens;
 }
 
-string coperator::fcode(int ident) {
+string asoperator::fcode(int ident) {
     vector<token> tokens = tokenize(code, true);
     identify_tokens(&tokens);
 
@@ -308,7 +321,7 @@ string coperator::fcode(int ident) {
     return c.str();
 }
 
-string cchild::fcode(int ident) {
+string aschild::fcode(int ident) {
     vector<token> tokens = tokenize(code, true);
     identify_tokens(&tokens);
 

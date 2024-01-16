@@ -1,4 +1,6 @@
-#include "lscc.h"
+#define _CRT_SECURE_NO_WARNINGS
+#include "compilation.h"
+#include "preprocessor.h"
 
 #if ((defined(_MSVC_LANG) && _MSVC_LANG >= 201703L) || __cplusplus >= 201703L)
 #else
@@ -8,13 +10,19 @@
 /*
 todo:
 
-LS operators
+!!! condition with functions !!!
 
-LS childs
+precompiled {
+    def operator foo()
+    redef token1 token2
+}
 
+datatypes
 struct token
+arrays
 
-preprocessors
+lineconcat \
+linesplit ;
 
 evaluate functions
 edef foo():
@@ -32,8 +40,12 @@ map < string, Basetype > type_dict = {
 
 map < string, Tokentypes > tokens_dict = {
     { "def", Tokentypes::definition },
+    { "operator", Tokentypes::_operator },
+    { "child", Tokentypes::child },
+    { "struct", Tokentypes::_struct},
     { "mold", Tokentypes::mold_definition },
     { "end", Tokentypes::end },
+    { "rel", Tokentypes::rel },
     { "$", Tokentypes::condition },
     { "[", Tokentypes::list_start },
     { "]", Tokentypes::list_end },
@@ -51,9 +63,6 @@ map < string, Tokentypes > tokens_dict = {
     { "include", Tokentypes::_include },
     { "with", Tokentypes::with },
     { "#", Tokentypes::comment },
-    { "operator", Tokentypes::_operator },
-    { "child", Tokentypes::child },
-    { "struct", Tokentypes::_struct},
     { "=", Tokentypes::equal },
     { "==", Tokentypes::je },
     { "!=" , Tokentypes::jne },
@@ -67,6 +76,7 @@ map < string, Tokentypes > tokens_dict = {
     { "!<", Tokentypes::jnl },
     { "<=", Tokentypes::jle },
     { "!<=", Tokentypes::jnle },
+    { "is", Tokentypes::is },
     { "$!", Tokentypes::inv }
 };
 
@@ -74,14 +84,13 @@ int ROspaces = 0;
 string section_data = "SECTION .data:\n";
 string section_text = "SECTION .text:\n";
 vector<int> argument_order;
-vector<string> REG;
 vector<constant> spaces;
-vector<coperator> operators;
-vector<cchild> childs;
+vector<asoperator> operators;
+vector<aschild> childs;
 vector<constant> externs;
-vector<string> includes_f;
-vector<string> pcllibs;
+vector<string> pcllibs, includes_f, REG;
 CallingConvention convention;
+preprocessor preproc;
 int architecture = 64;
 
 map<LsccArg, string> Args {
@@ -92,7 +101,8 @@ map<LsccArg, string> Args {
     {LsccArg::none, ""},
     {LsccArg::o, ""},
     {LsccArg::p, ""},
-    {LsccArg::s, ""}
+    {LsccArg::s, ""},
+    {LsccArg::info, ""}
 };
 
 filesystem::path WorkingDirectory;
@@ -108,10 +118,11 @@ int main(int argc, char** argv)
     Options :                                                           \n\
     ----compilation options----                                         \n\
     -o    output file | default: input file.obj                         \n\
-    -cc   calling convention[SysVi386, SysV, M64, cdecl]                       \n\
+    -cc   calling convention[SysVi386, SysV, M64]                       \n\
     -f    format[elf32, elf64, elfx32, win32, win64]                    \n\
     -n    no start function                                             \n\
     -s    save asm file                                                 \n\
+    -info shows basic infos                                             \n\
                                                                         \n\
     ----warnings options----                                            \n\
     --w-type    disable type convertion warnings                        \n";
@@ -142,6 +153,11 @@ int main(int argc, char** argv)
                     Args[LsccArg::f] = "elf32";
                 }
             }
+        }
+
+        in1 = in("-info", argv, argc);
+        if (in1 != -1) {
+            Args[LsccArg::info] = "1";
         }
 
         in1 = in("-o", argv, argc);
@@ -188,7 +204,7 @@ int main(int argc, char** argv)
         }
         else {
             cout << "Error: invalid format \"" << Args[LsccArg::f] << "\" !" << endl;
-            exit(1);
+            std::exit(1);
         }
 
         if (Args[LsccArg::cc] == "M64") {
@@ -209,7 +225,7 @@ int main(int argc, char** argv)
         }
         else {
             cout << "Error: invalid calling convention \"" << Args[LsccArg::cc] << "\" !" << endl;
-            exit(1);
+            std::exit(1);
         }
 
         compilation c;
@@ -218,23 +234,6 @@ int main(int argc, char** argv)
         vector<token> tokens = tokenize(Args[LsccArg::i]);
         fuse_symbols(&tokens);
         identify_tokens(&tokens);
-        if (in("start", get_functions_name(tokens)) != -1) {
-            if (Args[LsccArg::f] == "win64" || Args[LsccArg::f] == "win32") {
-                section_text += "\
-GLOBAL WinMain\n\
-WinMain:\n\
-  call start\n\
-  ret\n\
-\n";
-            }
-        } else {
-            section_text += "\
-GLOBAL _main\n\
-_main:\n\
-  call start\n\
-  ret\n\
-\n";
-        }
 
         for (constant& e : externs) {
             section_text += "extern " + e.name + "\n";

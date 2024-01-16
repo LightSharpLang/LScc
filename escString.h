@@ -1,6 +1,6 @@
 #include <string>
 #include <map>
-using namespace std;
+using std::string;
 
-extern map < string, int > escapes;
+extern std::map < string, int > escapes;
 string formatString(string str);

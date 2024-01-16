@@ -5,6 +5,11 @@ compilation compile_file(string file, string& section_text, compilation c) {
     precompilation clib;
     vector<token> tokenlibs;
 
+    if (!filesystem::exists(filesystem::path(file))) {
+        cerr << Error::errorTypeError << "Error: file \"" << file << "\" not found!\n" << Error::errorTypeNormal;
+        exit(1);
+    }
+
     check_pcllibs(tokens);
 
     if (pcllibs.size() > 0) {
@@ -31,9 +36,6 @@ compilation compile_file(string file, string& section_text, compilation c) {
 
     vector<string> subincludes;
 
-    fuse_symbols(&tokens);
-    identify_tokens(&tokens);
-    check_externs(tokens);
     check_includes(tokens, subincludes);
 
     // compiling includes
@@ -60,9 +62,26 @@ compilation compile_file(string file, string& section_text, compilation c) {
         }
     }
 
+    if (Args[LsccArg::info] == "1")
+        cout << Error::errorTypeInfo << "Info: Tokenizing file: " + file << '\n' << Error::errorTypeNormal;
+
+    currentFile = file;
+    fuse_symbols(&tokens);
+    identify_tokens(&tokens);
+    check_externs(tokens);
+
     vector<int> functions = get_functions(tokens);
     sort(functions.begin(), functions.end());
     functions.erase(unique(functions.begin(), functions.end()), functions.end());
+
+    c.__tokens = tokens;
+
+    if (Args[LsccArg::info] == "1")
+        cout << Error::errorTypeInfo << "Info: Compiling file: " + file << '\n' << Error::errorTypeNormal;
+
+    for (int f : functions) {
+        preproc.processFile(f, tokens);
+    }
 
     for (int f : functions) {
         section_text += c.compile_function(f, tokens);
@@ -84,11 +103,18 @@ void check_externs(vector<token> tokens) {
 
     so we need to identify the token of type Tokentypes::extern and register the following token
     */
-    bool next_e = false;
+    bool next_e = false, rel = false;
     for (auto t : tokens) {
-        if (next_e) {
+        if (t.type == Tokentypes::rel) {
+            rel = true;
+        }
+        else if (next_e) {
             if (t.next->type == Tokentypes::parameter_start)
-                externs.push_back(constant(t.t, Tokentypes::function, "", Basetype::_any));
+                if (rel) externs.push_back(constant(t.t, Tokentypes::_extern, "", Basetype::_any));
+                else {
+                    externs.push_back(constant(t.t, Tokentypes::function, "", Basetype::_any));
+                    rel = false;
+                }
             else
                 externs.push_back(constant(t.t, Tokentypes::global_variable, "", Basetype::_any));
             next_e = false;
@@ -112,7 +138,7 @@ void check_includes(vector<token> tokens, vector<string>& include_f) {
             include_f.push_back(t.t);
             next_e = false;
         }
-        if (t.type == Tokentypes::_include) next_e = true;
+        if (t.t == "include") next_e = true;
     }
 }
 
@@ -172,6 +198,8 @@ vector<constant> compilation::browse_argument(vector<token>& tokens, bool ignore
         }
     }
 
+    // check for operators
+
     for (size_t i = 0; i < tokens.size(); i++) {
         if (tokens[i].type == Tokentypes::_operator) {
             op = true;
@@ -197,7 +225,7 @@ vector<constant> compilation::browse_argument(vector<token>& tokens, bool ignore
                 if (ignoreConstantError == false) {
                     if (consta == (constant*)((void*)0)) {
                         cerr << Error::errorTypeError << "Error" << Error::errorTypeNormal << " at line " << tokens[i].line << ": constant '" + tokens[i].t + "' used but not defined!" << endl;
-                        exit(1);
+                        std::exit(1);
                     }
                     else {
                         if (tokens[i + 1].type == Tokentypes::parameter_start) {
@@ -256,6 +284,9 @@ vector<constant> compilation::browse_argument(vector<token>& tokens, bool ignore
                     }
                 }
             }
+            elif(tokens[i].type == Tokentypes::type) {
+                arguments.push_back(constant(tokens[i].t, Tokentypes::_constant, "", Basetype::_none));
+            }
         }
 
         return arguments;
@@ -288,6 +319,9 @@ vector<constant> browse_parameters(vector<token>& tokens) {
 }
 
 string compilation::get_reg() {
+    /*
+    This function gives a new reserved space in stack for local variables
+    */
     string space = "";
     space = "[" + REG[6] + " - " + to_string(this->stack) + "]";
     this->stack += 8; // reserve 1 byte for type identification
@@ -385,8 +419,8 @@ Tokentypes compilation::detect_constant_type(token tok, vector<token>& line) {
             return Tokentypes::variable;
         }
     }
-    cerr << Error::errorTypeError << "Error" << Error::errorTypeNormal << " at line " << tok.line << ", constant \"" << tok.t << "\" used but not created";
-    exit(1);
+    cerr << Error::errorTypeError << "Error" << Error::errorTypeNormal << " at line " << tok.line << ", constant \"" << tok.t << "\" used but not created in file \"" << line[0].file << "\"\n";
+    std::exit(1);
 
 }
 
@@ -461,7 +495,7 @@ bool compilation::check_condi(vector<token> line, vector<token> _tokens, int* co
                 }
                 else {
                     cerr << Error::errorTypeError << "Error:" << Error::errorTypeNormal << "syntax error at line " << line[i].line << endl;
-                    exit(1);
+                    std::exit(1);
                 }
             }
             elif(line[i - 1].type == Tokentypes::condition) {
@@ -485,12 +519,12 @@ bool compilation::check_condi(vector<token> line, vector<token> _tokens, int* co
                         return true;
                     }
                     cerr << Error::errorTypeError << "Error:" << Error::errorTypeNormal << "can't define a condition insine a condition statement at line " << line[i].line << endl;
-                    exit(1);
+                    std::exit(1);
                     return true;
                 }
                 else {
                     cerr << Error::errorTypeError << "Error:" << Error::errorTypeNormal << "syntax error at line " << line[i].line << endl;
-                    exit(1);
+                    std::exit(1);
                 }
             }
         }
@@ -502,6 +536,8 @@ int compilation::exec_condi(vector<token> line, vector<token> _tokens, string na
     // detect condition
 
     condition currentC;
+    bool execute = true;
+    bool isDynamic = false;
 
     for (condition c : conditions) {
         if (c.name == name) {
@@ -512,33 +548,46 @@ int compilation::exec_condi(vector<token> line, vector<token> _tokens, string na
 
     if (currentC.name == "") {
         cerr << Error::errorTypeError << "Error" << Error::errorTypeNormal << " at line " << line[0].line << " : cannot find condition named: " << name << endl;
-        exit(1);
+        std::exit(1);
+    }
+
+    //check is the condition is evaluated
+    if (currentC.op == Tokentypes::is) {
+        if (fromType(currentC.left.lastUse) == currentC.right.name) {
+            isDynamic = true;
+            goto condi;
+        }
+        else {
+            execute = false;
+            isDynamic = true;
+        }
     }
 
     // prepare conditon
 
-    L += 1;
+    if (execute) {
+        L += 1;
 
-    {
-        if (currentC.left.reg != "") {
-            code << "  mov rcx, " << currentC.left.reg << endl;
+        {
+            if (currentC.left.reg != "") {
+                code << "  mov rcx, " << currentC.left.reg << endl;
+            }
+            else {
+                code << "  mov rcx, " << currentC.left.name << endl;
+            }
         }
-        else {
-            code << "  mov rcx, " << currentC.left.name << endl;
+        {
+            if (currentC.right.reg != "") {
+                code << "  mov rbx, qword " << currentC.right.reg << endl;
+            }
+            else {
+                code << "  mov rbx, " << currentC.right.name << endl;
+            }
         }
-    }
-    {
-        if (currentC.right.reg != "") {
-            code << "  mov rbx, qword " << currentC.right.reg << endl;
-        }
-        else {
-            code << "  mov rbx, " << currentC.right.name << endl;
-        }
-    }
-    code << "  cmp rcx, rbx" << endl;
+        code << "  cmp rcx, rbx" << endl;
 
-    if (!inverted) {
-        switch (currentC.op) {
+        if (!inverted) {
+            switch (currentC.op) {
             case (Tokentypes::je):
                 code << "  je " << ".L" << L << endl;
                 break;
@@ -599,10 +648,10 @@ int compilation::exec_condi(vector<token> line, vector<token> _tokens, string na
                 else
                     code << "  jng " << ".L" << L << endl;
                 break;
+            }
         }
-    }
-    else {
-        switch (currentC.op) {
+        else {
+            switch (currentC.op) {
             case (Tokentypes::je):
                 code << "  jne " << ".L" << L << endl;
                 break;
@@ -639,13 +688,16 @@ int compilation::exec_condi(vector<token> line, vector<token> _tokens, string na
             case (Tokentypes::jng):
                 code << "  jg " << ".L" << L << endl;
                 break;
+            }
         }
+
+        //swap code and condition code to write conditions
+        swap();
+
+        code << ".L" << L << ":" << endl;
     }
 
-    //swap code and condition code to write conditions
-    swap();
-
-    code << ".L" << L << ":" << endl;
+    condi:
 
     // code inside satements
     
@@ -664,10 +716,12 @@ int compilation::exec_condi(vector<token> line, vector<token> _tokens, string na
                         j++;
                         break;
                     }
-                    condi = check_condi(line, _tokens, &j, true);
-                    if (condi == false) {
-                        interpret_and_compile_var(line);
-                        interpret_and_compile(line);
+                    if (execute) {
+                        condi = check_condi(line, _tokens, &j, true);
+                        if (condi == false) {
+                            interpret_and_compile_var(line);
+                            interpret_and_compile(line);
+                        }
                     }
                     line.erase(line.begin(), line.end());
                 }
@@ -678,10 +732,10 @@ int compilation::exec_condi(vector<token> line, vector<token> _tokens, string na
             else line.push_back(_tokens[j]);
         }
 
-        code << "  ret" << endl;
+        if (execute && !isDynamic) code << "  ret" << endl;
 
         //swap again to write back to function's code
-        swap();
+        if(!isDynamic) swap();
 
         return j;
     }
@@ -689,51 +743,94 @@ int compilation::exec_condi(vector<token> line, vector<token> _tokens, string na
         bool condi = false;
         int i = 0;
         condi = check_condi(line, _tokens, &i, true);
-        if (!condi) {
+        if (!condi && execute) {
             interpret_and_compile_var(line);
             interpret_and_compile(line);
         }
         line.erase(line.begin(), line.end());
     }
 
-    code << "  ret" << endl;
+    if (!isDynamic) code << "  ret" << endl;
     //swap again to write back to function's code
-    swap();
+    if (!isDynamic) swap();
     return 1;
 }
 
+std::array<Tokentypes, 11> conditionOperators = { 
+    Tokentypes::je,
+    Tokentypes::jne,
+    Tokentypes::jg,
+    Tokentypes::jng,
+    Tokentypes::jge,
+    Tokentypes::jnge,
+    Tokentypes::jl,
+    Tokentypes::jnl,
+    Tokentypes::jle,
+    Tokentypes::jnle,
+    Tokentypes::is
+};
+
 void compilation::register_condi(vector<token> line) {
-    condition c;
+    condition c = {};
     // get condition's name
     c.name = line[1].t; // the name is always after the $ which must be the first token
+
     // get left operand
     // in order to do so we need to know the position of the '=' sign which is right after the name
     Tokentypes optype = detect_constant_type(line[3], line);
     if (optype == Tokentypes::variable || optype == Tokentypes::global_variable || optype == Tokentypes::function) {
         if (is_registered_constant(line[3].t) != -1) {
             c.left = *get_registered_constant(line[3].t);
-
         }
         else {
-            cerr << Error::errorTypeError << "Error at line " << line[0].line << " constant \"" << line[3].t << "\" undefined!" << Error::errorTypeNormal << endl;;
-            exit(1);
+            cerr << Error::errorTypeError << "Error at line " << line[0].line << " constant \"" << line[3].t << "\" undefined!" << Error::errorTypeNormal << endl;
+            std::exit(1);
         }
     }
     else {
         c.left = constant(line[3].t, optype, "", Basetype::_any);
     }
+
+    int i = 0;
+    int operatortoken = -1;
+
     // get operator
-    c.op = line[4].type;
+    for (auto t : line) {
+        for (auto o : conditionOperators) {
+            if (t.type == o) {
+                c.op = line[4].type;
+                operatortoken = i;
+                break;
+            }
+        }
+        if (operatortoken != -1) break;
+        i++;
+    }
     // get right operand
-    optype = detect_constant_type(line[5], line);
+    if (line[operatortoken].t == "!!!") {
+        cerr << Error::errorTypeError << "Error at line " << Error::errorTypeNormal << line[0].line << " condition needs a right operand" << endl;
+        std::exit(1);
+    }
+
+    if (line[operatortoken].next == nullptr) {
+        cerr << Error::errorTypeError << "Error: unexpected eof at line " << line[operatortoken + 1].line << Error::errorTypeNormal << '\n';
+        exit(1);
+    }
+
+    optype = detect_constant_type(line[operatortoken+1], line);
     if (optype == Tokentypes::variable || optype == Tokentypes::global_variable || optype == Tokentypes::function) {
-        if (is_registered_constant(line[5].t) != -1) {
-            c.right = *get_registered_constant(line[5].t);
+        if (is_registered_constant(line[operatortoken + 1].t) != -1) {
+            c.right = *get_registered_constant(line[operatortoken + 1].t);
 
         }
         else {
-            cerr << Error::errorTypeError << "Error at line " << line[0].line << " constant \"" << line[5].t << "\" undefined!" << Error::errorTypeNormal << endl;;
-            exit(1);
+            if (line[operatortoken + 1].type != Tokentypes::is) {
+                cerr << Error::errorTypeError << "Error at line " << line[0].line << " constant \"" << line[5].t << "\" undefined!" << Error::errorTypeNormal << endl;
+                std::exit(1);
+            }
+            else {
+                c.right = constant(line[operatortoken + 1].t, Tokentypes::_constant, "", Basetype::_any);
+            }
         }
     }
     else {
@@ -782,7 +879,7 @@ string compilation::interpret_and_compile_var(vector<token>& _tokens) {
                         }
                         else {
                             cerr << Error::errorTypeError << "Error at line " << Error::errorTypeNormal << _tokens[0].line << " Cannot change type of fix(" << constants[consta].name << ") from " << fromType(constants[consta].lastUse) << " to " << fromType(type) << "!" << endl;
-                            exit(1);
+                            std::exit(1);
                         }
                     }
                     if (value != constants[consta].reg) {
@@ -809,7 +906,7 @@ string compilation::interpret_and_compile_var(vector<token>& _tokens) {
                         }
                         else {
                             cerr << Error::errorTypeError << "Error at line " << Error::errorTypeNormal << _tokens[0].line << " Cannot change type of fixed " << constants[consta].name << "from " << fromType(constants[consta].lastUse) << " to " << fromType(type) << "!" << endl;
-                            exit(1);
+                            std::exit(1);
                         }
 
                     }
@@ -831,7 +928,7 @@ string compilation::interpret_and_compile_var(vector<token>& _tokens) {
                     consta = is_registered_constant(_tokens[i + 1].t);
                     if (consta == -1) {
                         cerr << Error::errorTypeError << "Error at line: " << Error::errorTypeNormal << _tokens[0].line << " cannot use undefined variable '" << _tokens[i - 1].t << "'!" << endl;
-                        exit(1);
+                        std::exit(1);
                     }
                     elif(constants[consta].type == Tokentypes::variable) {
                         _tokens.insert(_tokens.begin(), { token(_tokens[i + 1].t, _tokens[0].line, Tokentypes::equal), token("=", _tokens[0].line, Tokentypes::equal) });
@@ -866,13 +963,24 @@ string compilation::interpret_and_compile_var(vector<token>& _tokens) {
 string compilation::interpret_and_compile(vector<token>& _tokens) {
     string fname = "";
     bool isChild = false;
+    bool isMold = false;
     constant childCaller;
 
     for (size_t i = 0; i < _tokens.size(); i++) {
         if (_tokens[i].type == Tokentypes::_constant || _tokens[i].t == "int") {
-            if (_tokens[i].next->type == Tokentypes::parameter_start) {
+            if (_tokens[i + 1].type == Tokentypes::parameter_start) {
                 size_t consta = is_registered_constant(_tokens[i].t);
-                if (consta != -1) {
+                for (auto m : preproc.molds) {
+                    if (m.name == _tokens[i].t) {
+                        isMold = true;
+                        break;
+                    }
+                }
+                if (consta != -1 || isMold) {
+                    if (isMold) {
+                        fname = _tokens[i].t;
+                        break;
+                    }
                     if (constants[consta].type == Tokentypes::function || constants[consta].type == Tokentypes::_extern) {
                         if (_tokens[i + 1].type == Tokentypes::parameter_start) fname = constants[consta].name;
                         break;
@@ -880,31 +988,47 @@ string compilation::interpret_and_compile(vector<token>& _tokens) {
                     else {
                         if (detect_constant_type(_tokens[i], _tokens) == Tokentypes::function) {
                             cerr << Error::errorTypeError << "Error" << " at line " << Error::errorTypeNormal << _tokens[i].line << ": function " << _tokens[i].t << " called but not created";
-                            exit(1);
+                            std::exit(1);
                         }
                     }
                 }
                 else {
                     cerr << Error::errorTypeError << "Error at line " << Error::errorTypeNormal << _tokens[0].line << ": Cannot call non existant function \"" << _tokens[i].t << "\" !" << endl;
-                    exit(1);
+                    std::exit(1);
                 }
-            } elif (_tokens[i].next->type == Tokentypes::float_separator) {
+            }
+            elif(_tokens[i].next->type == Tokentypes::float_separator) {
                 isChild = true;
                 bool registered = 0;
+
+                // is not a float?
+                if (is_float(token(_tokens[i].t + _tokens[i + 1].t + _tokens[i + 2].t))) break;
+
                 // is registered child?
-                for (auto j : childs) { registered = (j.name == _tokens[i].next->next->t); }
+                for (auto j : childs) {
+                    registered |= (j.name == _tokens[i].next->next->t);
+                }
+                for (auto j : preproc.childs) {
+                    registered |= (j.name == _tokens[i].next->next->t);
+                }
+
                 if (registered) {
                     fname = _tokens[i].next->next->t;
-                    childCaller = *get_registered_constant(_tokens[i].t);
+                    constant* caller = get_registered_constant(_tokens[i].t);
+                    if (caller == nullptr) {
+                        cerr << Error::errorTypeError << "Error at line " << Error::errorTypeNormal << _tokens[0].line << ": Cannot call from non existant constant \"" << _tokens[i].t << "\" !" << endl;
+                        exit(1);
+                    }
+                    childCaller = *caller;
                     break;
                 }
-                else if (detect_constant_type(_tokens[i], _tokens) == Tokentypes::function) {
+                elif(detect_constant_type(_tokens[i], _tokens) == Tokentypes::function) {
                     cerr << Error::errorTypeError << "Error" << " at line " << Error::errorTypeNormal << _tokens[i].line << ": child " << _tokens[i].t << " called but not created";
-                    exit(1);
+                    std::exit(1);
                 }
                 else {
                     cerr << Error::errorTypeError << "Error at line " << Error::errorTypeNormal << _tokens[0].line << ": Cannot call non existant function \"" << _tokens[i].t << "\" !" << endl;
-                    exit(1);
+                    std::exit(1);
                 }
             }
         }
@@ -934,58 +1058,127 @@ string compilation::interpret_and_compile(vector<token>& _tokens) {
             }
         }
         elif(isChild) {
+
+            bool bIsAsChild = 0;
+            bool bIsLsChild = 0;
+            // is asm or L# child?
+            for (auto j : childs) {
+                bIsAsChild |= (j.name == fname);
+            }
+            for (auto j : preproc.childs) {
+                bIsLsChild |= (j.name == fname);
+            }
+
             vector<constant> parameters = { childCaller };
             vector<constant> arguments = browse_argument(_tokens);
             parameters.insert(parameters.end(), arguments.begin(), arguments.end());
 
-            cout << "child " + fname + "() called whith parameters:";
-            for (constant c : parameters) cout << c.name << " ";
-            cout << '\n';
+            if (bIsAsChild) {
+                aschild reference;
 
-            cchild reference;
-
-            // search for the called child (we know it is created!)
-            for (auto c : childs) {
-                if (c.name == fname) {
-                    reference = c;
+                // search for the called child (we know it is created!)
+                for (auto c : childs) {
+                    if (c.name == fname) {
+                        reference = c;
+                    }
                 }
+
+                // verify parameters
+
+                for (int i = 0; i < reference.parameters.size(); i++) {
+                    if (parameters[i].lastUse != reference.parameters[i].lastUse &&
+                        parameters[i].lastUse != Basetype::_any &&
+                        reference.parameters[i].lastUse != Basetype::_any) {
+                        cerr << Error::errorTypeError << "Error at line:" << _tokens[0].line << Error::errorTypeNormal << " could not find any child for type " << fromType(parameters[i].lastUse) << " at paremeter " << i << "!" << endl;
+                        cerr << "Candidate is: " << fromType(reference.parameters[i].lastUse) << '\n';
+                        std::exit(1);
+                    }
+                }
+
+                for (int i = 0; i < reference.parameters.size(); i++) {
+                    if (parameters[i].reg != "") {
+                        if (!replace(reference.code, reference.parameters[i].name, parameters[i].reg)) {
+                            cerr << Error::errorTypeError << "Error" << Error::errorTypeNormal << " in child " << reference.name << " parameter " << i << " cannot be found";
+                            std::exit(1);
+                        }
+                    }
+                    else {
+                        if (!replace(reference.code, reference.parameters[i].name, parameters[i].name)) {
+                            cerr << Error::errorTypeError << "Error" << Error::errorTypeNormal << " in child " << reference.name << " parameter " << i << " cannot be found";
+                            std::exit(1);
+                        }
+                    }
+                }
+
+                code << reference.fcode(2);
+            }
+            elif (bIsLsChild) {
+                lschild reference;
+
+                // search for the called child (we know it is created!)
+                int offset = 0;
+                for (auto c : preproc.childs) {
+                    if (c.name == fname) {
+                        reference = c;
+                        break;
+                    }
+                    offset++;
+                }
+
+                // verify parameters
+
+                for (int i = 0; i < reference.parameters.size(); i++) {
+                    if (parameters[i].lastUse != reference.parameters[i].lastUse &&
+                        parameters[i].lastUse != Basetype::_any &&
+                        reference.parameters[i].lastUse != Basetype::_any) {
+                        cerr << Error::errorTypeError << "Error at line:" << _tokens[0].line << Error::errorTypeNormal << " could not find any child for type " << fromType(parameters[i].lastUse) << " at paremeter " << i << "!" << endl;
+                        cerr << "Candidate is: " << fromType(reference.parameters[i].lastUse) << '\n';
+                        std::exit(1);
+                    }
+                }
+
+                code << compile_mold(false, true, false, offset, __tokens, parameters);
+            }
+
+        }
+        elif(isMold) {
+
+            vector<constant> parameters = { };
+            vector<constant> arguments = browse_argument(_tokens);
+            parameters.insert(parameters.end(), arguments.begin(), arguments.end());
+
+            mold reference;
+
+            parameters = browse_argument(_tokens, true);
+
+            // search for the called mold (we know it is created!)
+            int offset = 0;
+            for (auto c : preproc.molds) {
+                if (c.name == fname) {
+                     reference = c;
+                    break;
+                }
+                offset++;
             }
 
             // verify parameters
-
             for (int i = 0; i < reference.parameters.size(); i++) {
                 if (parameters[i].lastUse != reference.parameters[i].lastUse &&
                     parameters[i].lastUse != Basetype::_any &&
                     reference.parameters[i].lastUse != Basetype::_any) {
-                    cerr << Error::errorTypeError << "Error at line:" << _tokens[0].line << Error::errorTypeNormal << " could not find any child for type " << fromType(parameters[i].lastUse) << " at paremeter " << i << "!" << endl;
+                    cerr << Error::errorTypeError << "Error at line:" << _tokens[0].line << Error::errorTypeNormal << " could not find any mold for type " << fromType(parameters[i].lastUse) << " at paremeter " << i << "!" << endl;
                     cerr << "Candidate is: " << fromType(reference.parameters[i].lastUse) << '\n';
-                    exit(1);
+                    std::exit(1);
                 }
             }
 
-            for (int i = 0; i < reference.parameters.size(); i++) {
-                if (parameters[i].reg != "") {
-                    if (!replace(reference.code, reference.parameters[i].name, parameters[i].reg)) {
-                        cerr << Error::errorTypeError << "Error" << Error::errorTypeNormal << " in child " << reference.name << " parameter " << i << " cannot be found";
-                        exit(1);
-                    }
-                }
-                else {
-                    if (!replace(reference.code, reference.parameters[i].name, parameters[i].name)) {
-                        cerr << Error::errorTypeError << "Error" << Error::errorTypeNormal << " in child " << reference.name << " parameter " << i << " cannot be found";
-                        exit(1);
-                    }
-                }
-            }
-
-            code << reference.fcode(2);
-
+            code << compile_mold(true, false, false, offset, __tokens, parameters);
         }
         elif(fname == "nop") {
             code << "  nop" << endl;
         }
         elif(fname == "int") {
-            vector<constant> parameters = browse_argument(_tokens);
+            vector<constant> parameters = browse_argument(_tokens, true);
             if (parameters[0].reg != "") code << "  int " << parameters[0].reg << endl;
             else code << "  int " << parameters[0].name << endl;
         }
@@ -1011,7 +1204,7 @@ string compilation::interpret_and_compile(vector<token>& _tokens) {
                     }
                     else {
                         cerr << Error::errorTypeError << "Error at line " << Error::errorTypeNormal << _tokens[0].line << " Cannot change type of fix(" << c->name << ")" << " to unsigned !" << endl;
-                        exit(1);
+                        std::exit(1);
                     }
                 }
                 else {
@@ -1029,7 +1222,7 @@ string compilation::interpret_and_compile(vector<token>& _tokens) {
                     }
                     else {
                         cerr << Error::errorTypeError << "Error at line " << Error::errorTypeNormal << _tokens[0].line << " Cannot change type of fix(" << c->name << ")" << " to signed !" << endl;
-                        exit(1);
+                        std::exit(1);
                     }
                 }
                 else {
@@ -1039,26 +1232,38 @@ string compilation::interpret_and_compile(vector<token>& _tokens) {
         }
         elif(fname == "is") {
             vector<constant> parameters = browse_argument(_tokens, true);
+
+            if (parameters.size() != 2) {
+                cerr << Error::errorTypeError << "Error at line: " << _tokens[0].line << Error::errorTypeNormal << " is() takes exactly two arguments !" << endl;
+                std::exit(1);
+            }
+
+            constant* c = &constants[is_registered_constant(parameters[1].name)];
+            if (c == nullptr) {
+                cerr << Error::errorTypeError << "Error at line: " << _tokens[0].line << Error::errorTypeNormal << " Cannot get attribute of \"" << parameters[1].name << "\"!" << endl;
+                std::exit(1);
+            }
             if (parameters[0].name == "UNSIGNED") {
-                constant* c = &constants[is_registered_constant(parameters[1].name)];
-                if (c != nullptr) {
-                    code << "  mov " << REG[0] << ", " << (c->isUnsigned) << endl;
-                }
-                else {
-                    cerr << Error::errorTypeError << "Error at line: " << _tokens[0].line << Error::errorTypeNormal << " Cannot get attribute of \"" << parameters[1].name << "\"!" << endl;
-                }
+                code << "  mov " << REG[0] << ", " << (c->isUnsigned) << endl;
             }
             elif(parameters[0].name == "SIGNED") {
-                constant* c = &constants[is_registered_constant(parameters[1].name)];
-                if (c != nullptr) {
-                    code << "  mov " << REG[0] << ", " << (!c->isUnsigned) << endl;
-                }
-                else {
-                    cerr << Error::errorTypeError << "Error at line: " << _tokens[0].line << Error::errorTypeNormal << " Cannot get attribute of \"" << parameters[1].name << "\"!" << endl;
-                }
+                code << "  mov " << REG[0] << ", " << (!c->isUnsigned) << endl;
+            }
+            elif(parameters[0].name == "int") {
+                code << "  mov " << REG[0] << ", " << (c->lastUse == Basetype::_int) << endl;
+            }
+            elif(parameters[0].name == "float") {
+                code << "  mov " << REG[0] << ", " << (c->lastUse == Basetype::_float) << endl;
+            }
+            elif(parameters[0].name == "str") {
+                code << "  mov " << REG[0] << ", " << (c->lastUse == Basetype::_string) << endl;
+            }
+            elif(parameters[0].name == "ptr") {
+                code << "  mov " << REG[0] << ", " << (c->lastUse == Basetype::_ptr) << endl;
             }
             else {
                 cerr << Error::errorTypeError << "Error at line: " << _tokens[0].line << Error::errorTypeNormal << " Invalid attrubute \"" << parameters[0].name << "\" !" << endl;
+                std::exit(1);
             }
         }
         elif(fname == "syscall") {
@@ -1078,7 +1283,7 @@ string compilation::interpret_and_compile(vector<token>& _tokens) {
                 reverse(parameters.begin(), parameters.end());
             }
             else {
-                code << "  sub " << REG[7] << ", " << 8 * (parameters.size() - 4) << '\n';
+                code << "  sub " << REG[7] << ", " << 8 * parameters.size() << '\n';
             }
 
             size_t p_num = -1;
@@ -1110,7 +1315,7 @@ string compilation::interpret_and_compile(vector<token>& _tokens) {
                 code << "  call " << fname << endl;
             }
             if (convention == CallingConvention::cdelc) {
-                code << "  add " << REG[7] << ", " << 8 * (parameters.size() - 4) << endl;
+                code << "  add " << REG[7] << ", " << 8 * parameters.size() << endl;
             }
         }
     }
@@ -1200,7 +1405,7 @@ void compilation::compile_operation(vector<token>& _tokens) {
             if (consta == -1)
             {
                 cerr << Error::errorTypeError << "Error" << " at line " << Error::errorTypeNormal << _tokens[i].line << ": constant " << _tokens[i].t << " used but not defined";
-                exit(1);
+                std::exit(1);
             }
             string value;
             if (constants[consta].reg != "") {
@@ -1228,8 +1433,8 @@ void compilation::compile_operation(vector<token>& _tokens) {
         }
 
         if (op) {
-            coperator ope;
-            for (coperator o : operators) {
+            asoperator ope;
+            for (asoperator o : operators) {
                 if (o.name == _tokens[i - 1].t) {
                     if (one.lastUse == o.parameters[0].lastUse ||
                         one.lastUse == Basetype::_any ||
@@ -1248,22 +1453,22 @@ void compilation::compile_operation(vector<token>& _tokens) {
 
             if (ope.name == "") {
                 cerr << Error::errorTypeError << "Error at line:" << _tokens[0].line << Error::errorTypeNormal << " could not find any operators for types " << fromType(one.lastUse) << " and " << fromType(two.lastUse) << "!" << endl;
-                exit(1);
+                std::exit(1);
             }
 
             if (ope.parameters.size() < 2 || ope.parameters.size() > 2) {
                 cerr << Error::errorTypeError << "Error" << Error::errorTypeNormal << " in operator " << ope.name << " parameters lenght not equal to two";
-                exit(1);
+                std::exit(1);
             }
             
             if (!replace(ope.code, ope.parameters[0].name, two.name)) {
                 cerr << Error::errorTypeError << "Error" << Error::errorTypeNormal << " in operator " << ope.name << " parameter 0 cannot be found";
-                exit(1);
+                std::exit(1);
             }
 
             if (!replace(ope.code, ope.parameters[1].name, one.name)) {
                 cerr << Error::errorTypeError << "Error" << Error::errorTypeNormal << " in operator " << ope.name << " parameter 1 cannot be found";
-                exit(1);
+                std::exit(1);
             }
 
             code << ope.fcode(2);
@@ -1321,7 +1526,7 @@ string compilation::browse_value(vector<token>& _tokens, bool is_global) {
                 if (consta == -1)
                 {
                     cerr << Error::errorTypeError << "Error" << " at line " << Error::errorTypeNormal << _tokens[i].line << ": constant " << _tokens[i].t << " used but not defined";
-                    exit(1);
+                    std::exit(1);
                 }
                 string value;
                 if (constants[consta].type == Tokentypes::function) {
@@ -1401,6 +1606,94 @@ void compilation::getStack(vector<token>& tokens) {
     return;
 }
 
+string compilation::compile_mold(bool isMold, bool isChild, bool isOperator, int offset, vector<token>& _tokens, vector<constant> passedParameters) {
+    string name = "";
+    vector<token> tokens = {};
+    vector<constant> p = {};
+    vector<constant> funcConstants = {};
+    vector<condition> funcConditions = {};
+    stringstream code2;
+    bool is_first_line = true;
+
+    if (isMold) {
+        tokens.insert(tokens.begin(), preproc.molds[offset].code.begin(), preproc.molds[offset].code.end());
+    } elif (isChild) {
+        tokens.insert(tokens.begin(), preproc.childs[offset].code.begin(), preproc.childs[offset].code.end());
+    } elif(isOperator) {
+        tokens.insert(tokens.begin(), preproc.operators[offset].code.begin(), preproc.operators[offset].code.end());
+    }
+    else {
+        cerr << Error::errorTypeError << "internal error : " << __FUNCTION__ << " " << __FILE__ << " isMold, isChild and isOperator are all false!\n" << Error::errorTypeNormal;
+    }
+
+    funcConstants.insert(funcConstants.end(), constants.begin(), constants.end());
+    funcConditions.insert(funcConditions.end(), conditions.begin(), conditions.end());
+    constants.clear();
+    conditions.clear();
+
+    constants.insert(constants.end(), extConstants.begin(), extConstants.end());
+    constants.insert(constants.end(), spaces.begin(), spaces.end());
+    register_function(_tokens);
+
+    bool parenthesis = false;
+    for (int i = 0; i < tokens.size(); i++) {
+        if (tokens[i].type == Tokentypes::parameter_start) parenthesis = true;
+        if (tokens[i].type == Tokentypes::parameter_end) {
+            parenthesis = false;
+            break;
+        }
+        if (tokens[i].type == Tokentypes::_constant && tokens[i + 1].type == Tokentypes::parameter_start) {
+            name = tokens[i].t;
+        }
+        if (tokens[i].type == Tokentypes::_constant && parenthesis) {
+            if (tokens[i - 1].type == Tokentypes::type && getType(tokens[i - 1]) != Basetype::_any) {
+                p.push_back(constant(tokens[i].t, Tokentypes::variable, passedParameters[p.size()].reg, getType(tokens[i - 1])));
+            }
+            else {
+                p.push_back(constant(tokens[i].t, Tokentypes::variable, passedParameters[p.size()].reg, passedParameters[p.size()].lastUse));
+            }
+        }
+    }
+
+    size_t constsize = constants.size();
+
+    constants.insert(constants.end(), p.begin(), p.end());
+
+    if (name == "") {
+        cerr << Error::errorTypeError << "Error: Function has no name at line " << Error::errorTypeNormal << tokens[0].line << " maybe you forgot `('?\n";
+    }
+
+    vector<token> line;
+
+    // iterate through function's tokens
+    bool condi = false;
+    for (int i = 0; i < tokens.size(); i++) {
+        if (tokens[i].type == Tokentypes::lf) {
+            if (!is_first_line) {
+                line.push_back(tokens[i]);
+                condi = check_condi(line, tokens, &i, false);
+                if (condi == false) {
+                    interpret_and_compile(line);
+                    interpret_and_compile_var(line);
+                }
+                line.erase(line.begin(), line.end());
+            }
+            else {
+                is_first_line = false;
+            }
+        }
+        elif(!is_first_line) line.push_back(tokens[i]);
+    }
+
+    constants.clear();
+    constants.insert(constants.end(), funcConstants.begin(), funcConstants.end());
+
+    conditions.clear();
+    conditions.insert(conditions.begin(), funcConditions.begin(), funcConditions.end());
+
+    return code2.str();
+}
+
 string compilation::compile_function(int function_start, vector<token>& _tokens) {
     string name = "";
     vector<token> tokens;
@@ -1436,7 +1729,17 @@ string compilation::compile_function(int function_start, vector<token>& _tokens)
             parenthesis = false;
             break;
         }
-        if (tokens[i].type == Tokentypes::_constant && tokens[i - 1].type == Tokentypes::definition) {
+        if (tokens[i].type == Tokentypes::definition) {
+            switch (tokens[i + 1].type) {
+                case Tokentypes::mold_definition:
+                    return "";
+                case Tokentypes::child:
+                    return "";
+                case Tokentypes::_operator:
+                    return "";
+            }
+        }
+        if (tokens[i].type == Tokentypes::_constant && tokens[i + 1].type == Tokentypes::parameter_start) {
             name = tokens[i].t;
             currentFname = name;
             code.str("");
@@ -1460,6 +1763,11 @@ string compilation::compile_function(int function_start, vector<token>& _tokens)
                 this->stack += 8;
             }
         }
+    }
+
+    if (currentFname == "") {
+        cerr << Error::errorTypeError << "Error: Function has no name at line " << Error::errorTypeNormal << tokens[0].line << " maybe you forgot `('?\n";
+        std::exit(1);
     }
 
     vector<token> line;
@@ -1490,8 +1798,17 @@ string compilation::compile_function(int function_start, vector<token>& _tokens)
 vector<int> get_functions(vector<token> tokens) {
     vector<int> functions;
     for (int i = 0; i < tokens.size(); i++) {
-        if (tokens[i].type == Tokentypes::definition && tokens[i + 1].type == Tokentypes::_constant) {
-            functions.push_back(i);
+        if (tokens[i].type == Tokentypes::definition) {
+            if (tokens[i + 1].type == Tokentypes::_constant) {
+                functions.push_back(i);
+            }
+            elif(tokens[i + 1].type == Tokentypes::child ||
+                tokens[i + 1].type == Tokentypes::mold_definition ||
+                tokens[i + 1].type == Tokentypes::_operator) {
+                if (tokens[i + 2].type == Tokentypes::_constant) {
+                    functions.push_back(i);
+                }
+            }
         }
     }
     return functions;
@@ -1523,8 +1840,8 @@ string precompilation::precompile_lib(vector<token>& _tokens) {
     bool bchild = false;
     bool bfunc = false;
     vector<constant> arguments;
-    coperator op;
-    cchild ch;
+    asoperator op;
+    aschild ch;
     stringstream code;
     token last("\n"); last.type = Tokentypes::lf;
 
@@ -1616,7 +1933,7 @@ string precompilation::precompile_lib(vector<token>& _tokens) {
             }
             else {
                 cout << Error::errorTypeWarn << "Error:" << Error::errorTypeNormal << " precompiled_functions not implemented!\n";
-                exit(1);
+                std::exit(1);
             }
 
             bool bop = false;

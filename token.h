@@ -18,7 +18,8 @@ enum class Basetype {
     _float,
     _string,
     _bool,
-    _ptr
+    _ptr,
+    __start_custom_types__
 };
 
 enum class Tokentypes {
@@ -46,6 +47,7 @@ enum class Tokentypes {
     _string,
     _char,
     ptr,
+    rel,
     operation,
     type,
     global,
@@ -72,6 +74,7 @@ enum class Tokentypes {
     jnge,
     jle,
     jng,
+    is,
     inv
 };
 
@@ -94,7 +97,7 @@ public:
     }
 };
 
-struct coperator {
+struct asoperator {
     std::string name;
     vector<constant> parameters;
     bool isPrecompiled = false;
@@ -103,7 +106,7 @@ struct coperator {
     string fcode(int ident);
 };
 
-struct cchild {
+struct aschild {
     std::string name;
     vector<constant> parameters;
     bool isPrecompiled = false;
@@ -120,24 +123,18 @@ public:
     bool identified = false;
     Tokentypes type;
     int constant = 0;
-    token* next;
+    token* next = nullptr;
+    string file;
     token(string str);
     token(string str, int line, Tokentypes type);
-};
-
-struct mold {
-    std::string name;
-    vector<constant> parameters;
-    bool isPrecompiled = false;
-    vector<token> code;
-    Basetype type;
-    string fcode(int ident);
+    token(const token&);
 };
 
 extern std::map < string, Basetype > type_dict;
 extern std::map < string, Tokentypes > tokens_dict;
-extern vector<coperator> operators;
-extern vector<cchild> childs;
+extern vector<asoperator> operators;
+extern vector<aschild> childs;
+extern string currentFile;
 
 string fromType(Basetype t);
 Basetype getType(token t);

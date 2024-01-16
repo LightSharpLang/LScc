@@ -1,7 +1,10 @@
 #pragma once
 #include "token.h"
 #include "escString.h"
+#include "preprocessor.h"
+#include "lscc.h"
 #include <algorithm>
+#include <array>
 using namespace std;
 
 enum class CallingConvention {
@@ -49,8 +52,10 @@ private:
     string interpret_and_compile(vector<token>& _tokens);
     Tokentypes detect_constant_type(token tok, vector<token>& line);
     void getStack(vector<token>& _tokens);
+    string compile_mold(bool isMold, bool isChild, bool isOperator, int offset, vector<token>& _tokens, vector<constant> passedParameters);
 public:
     int L = -1;
+    vector<token> __tokens;
     stringstream code;
     vector<constant> constants;
     vector<string> labels;
@@ -65,8 +70,8 @@ class precompilation
 {
 private:
 public:
-    vector<coperator> operatorslib;
-    vector<cchild> childslib;
+    vector<asoperator> operatorslib;
+    vector<aschild> childslib;
     bool is_operator(vector<token> _tokens, size_t index);
     bool is_child(vector<token> _tokens, size_t index);
     string precompile_lib(vector<token>& _tokens);
@@ -82,6 +87,7 @@ extern vector<string> pcllibs;
 extern vector<int> argument_order;
 extern filesystem::path WorkingDirectory;
 extern CallingConvention convention;
+extern class preprocessor preproc;
 extern int architecture;
 
 compilation compile_file(string file, string& section_text, compilation c);
