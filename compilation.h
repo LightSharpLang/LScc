@@ -8,10 +8,10 @@
 using namespace std;
 
 enum class CallingConvention {
-    SysVi386,
     SysV,
+    ABI,
     M64,
-    cdelc
+    ___cdecl
 };
 
 class condition {
@@ -49,7 +49,8 @@ private:
     string get_reg();
     string browse_value(vector<token>& _tokens, bool is_global = false);
     string interpret_and_compile_var(vector<token>& _tokens);
-    string interpret_and_compile(vector<token>& _tokens);
+    void interpret_and_compile(vector<token>& _tokens);
+    void callFunctionFromNameAndParameters(string name, vector<constant> parameters);
     Tokentypes detect_constant_type(token tok, vector<token>& line);
     void getStack(vector<token>& _tokens);
     string compile_mold(bool isMold, bool isChild, bool isOperator, int offset, vector<token>& _tokens, vector<constant> passedParameters);
@@ -84,17 +85,22 @@ extern string section_data;
 extern vector<constant> externs;
 extern vector<string> includes_f;
 extern vector<string> pcllibs;
+extern vector<structure> structs;
 extern vector<int> argument_order;
+extern vector<int> fargument_order;
 extern filesystem::path WorkingDirectory;
 extern CallingConvention convention;
 extern class preprocessor preproc;
 extern int architecture;
 
 compilation compile_file(string file, string& section_text, compilation c);
+void register_structures(int i, vector<token> tokens);
 void check_externs(vector<token> tokens);
 void check_includes(vector<token> tokens, vector<string>& include_f = includes_f);
+void check_redef(vector<token> tokens);
 void check_pcllibs(vector<token> tokens);
 vector<int> get_functions(vector<token> tokens);
+vector<int> get_structures(vector<token> tokens);
 vector<string> get_functions_name(vector<token> tokens);
 
 vector<constant> browse_parameters(vector<token>& tokens);

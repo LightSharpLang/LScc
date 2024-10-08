@@ -72,10 +72,14 @@ Basetype getType(token t) {
     if(it != type_dict.end()) {
         return it->second;
     }
+    cerr << Error::errorTypeError << "Error at line " << Error::errorTypeNormal << t.line << " Cannot assign unknown type " << t.t << "!" << endl;
+    std::exit(1);
     return Basetype::_none;
 }
 
 string currentFile = "";
+
+extern bool is_float(token t);
 
 void identify_tokens(vector<token>* tokens, bool is_lib) {
     int line = 1;
@@ -111,7 +115,7 @@ void identify_tokens(vector<token>* tokens, bool is_lib) {
             tokens->at(i).type = Tokentypes::_operator;
             tokens->at(i).identified = true;
         }
-        elif(alnum(tokens->at(i).t)) tokens->at(i).type = Tokentypes::_constant;
+        elif(alnum(tokens->at(i).t) || is_float(tokens->at(i).t)) tokens->at(i).type = Tokentypes::_constant;
         elif(tokens->at(i).t[0] == '"') tokens->at(i).type = Tokentypes::litteral;
         elif(tokens->at(i).t[0] == '\'') tokens->at(i).type = Tokentypes::litteral;
         else {
@@ -133,6 +137,15 @@ void fuse_symbols(vector<token>* tokens) {
     for (size_t j = 0; j < size; j++) {
         fused = 0;
         size = tokens->size();
+        if (j - fused < size - fused - 3) {
+            if (is_float(tokens->at(j - fused).t + tokens->at(j - fused + 1).t + tokens->at(j - fused + 2).t)) {
+                tokens->at(j - fused).t += tokens->at(j - fused + 1).t + tokens->at(j - fused + 2).t;
+                tokens->erase((tokens->begin() + (j - fused)) + 1);
+                tokens->erase((tokens->begin() + (j - fused)) + 1);
+                fused += 2;
+                continue;
+            }
+        }
         for (size_t i = 0; i < size - 1; i++) {
             if ((tokens_dict.find(tokens->at(i - fused).t + tokens->at(i - fused + 1).t) != tokens_dict.end()) ||
                 (in(tokens->at(i - fused).t + tokens->at(i - fused + 1).t, operators))) {
@@ -140,6 +153,25 @@ void fuse_symbols(vector<token>* tokens) {
                 tokens->erase((tokens->begin() + (i - fused)) + 1);
                 fused += 1;
             }
+        }
+    }
+}
+
+void fuse_structs(vector<token>* tokens) {
+    int fused = 0;
+    int size = tokens->size();
+    for (int i = 0; i < size; i++) {
+        if (tokens->at(i - fused).type == Tokentypes::_constant &&
+            tokens->at(i + 1 - fused).type == Tokentypes::float_separator &&
+            tokens->at(i + 2 - fused).type == Tokentypes::_constant)
+        {
+            tokens->at(i - fused).t = tokens->at(i - fused).t +
+                tokens->at(i + 1 - fused).t +
+                tokens->at(i + 2 - fused).t;
+
+            tokens->erase(tokens->begin() + i + 1 - fused);
+            tokens->erase(tokens->begin() + i + 1 - fused);
+            fused += 2;
         }
     }
 }
@@ -219,10 +251,6 @@ vector<token> tokenize(string file, bool isstr) {
     if (!isstr) {
         ifstream myfile(file.c_str());
 
-        if (!myfile.good()) {
-            cout << Error::errorTypeError << "Error" << Error::errorTypeNormal << ", file  \"" << file << "\" does not exist!" << endl;
-            std::exit(1);
-        }
         if (myfile.is_open())
         {
             string current_token = "";

@@ -17,14 +17,27 @@ enum class Basetype {
     _int,
     _float,
     _string,
-    _bool,
     _ptr,
-    __start_custom_types__
+    _bool, // start data types
+    _2bool,
+    _3bool,
+    _4bool,
+    _5bool,
+    _6bool,
+    _7bool,
+    _byte,
+    _word,
+    _dword,
+    _qword,
+    customStructure
 };
+
+
 
 enum class Tokentypes {
     null = 0,
     definition,
+    redefinition,
     mold_definition,
     end,
     condition,
@@ -34,6 +47,9 @@ enum class Tokentypes {
     list_end,
     parameter_start,
     parameter_end,
+    struct_start,
+    struct_end,
+    struct_variable,
     separator,
     float_separator,
     line_concat,
@@ -87,6 +103,10 @@ public:
     bool fixedType = false;
     bool inCondition = false;
     bool isUnsigned = false;
+    bool isFunctionCall = false;
+    bool isSmallVar = false;
+    int size = 0;
+    vector<constant> parameters = {};
     constant() {};
     constant(string str, Tokentypes _type, string _reg, Basetype _Type) {
         name = str;
@@ -94,6 +114,15 @@ public:
         reg = _reg;
         lastUse = _Type;
         inCondition = false;
+    }
+    constant(string str, Tokentypes _type, string _reg, Basetype _Type, bool isSmall, int smallSize) {
+        name = str;
+        type = _type;
+        reg = _reg;
+        lastUse = _Type;
+        inCondition = false;
+        isSmallVar = isSmall;
+        size = smallSize;
     }
 };
 
@@ -113,6 +142,12 @@ struct aschild {
     std::string code;
     Basetype type;
     string fcode(int ident);
+};
+
+struct structure {
+    string name = "";
+    vector<pair<string, Basetype>> vars;
+    int size = 0;
 };
 
 class token
@@ -145,6 +180,7 @@ bool in(string a, vector<string> b);
 size_t in(string a, char** b, int len);
 size_t in(string a, vector<token> b);
 void fuse_string_litterals(vector<token>* tokens);
+void fuse_structs(vector<token>* tokens);
 void clean_tokens(vector<token> *tokens);
 vector<token> tokenize(string file, bool isstr = false);
 void identify_tokens(vector<token>* tokens, bool is_lib = false);

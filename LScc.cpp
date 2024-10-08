@@ -4,42 +4,48 @@
 
 #if ((defined(_MSVC_LANG) && _MSVC_LANG >= 201703L) || __cplusplus >= 201703L)
 #else
-#error "compiler must be at c++17 to compile!"
+#error "compiler must be at c++17 or above to compile!"
 #endif
 
 /*
 todo:
 
-!!! condition with functions !!!
+make the language safe
 
-precompiled {
-    def operator foo()
-    redef token1 token2
-}
-
-datatypes
-struct token
-arrays
+arrays with basetype
+arrays with datatypes
+arrays with struct
 
 lineconcat \
-linesplit ;
 
-evaluate functions
+evaluated functions
 edef foo():
 
 */
 
 map < string, Basetype > type_dict = {
-    { "float", Basetype::_float },
-    { "int", Basetype::_int },
-    { "str", Basetype::_string },
-    { "bool", Basetype::_bool },
-    { "ptr", Basetype::_ptr },
-    { "any", Basetype::_any }
+    { "float", Basetype::_float     },
+    { "int", Basetype::_int         },
+    { "str", Basetype::_string      },
+    { "bool", Basetype::_bool       },
+    { "ptr", Basetype::_ptr         },
+    { "any", Basetype::_any         },
+    { "bool", Basetype::_bool       },
+    { "dbool", Basetype::_2bool     },
+    { "tbool", Basetype::_3bool     },
+    { "qbool", Basetype::_4bool     },
+    { "qtbool", Basetype::_5bool    },
+    { "hbool", Basetype::_6bool     },
+    { "sbool", Basetype::_7bool     },
+    { "byte", Basetype::_byte       },
+    { "word", Basetype::_word       },
+    { "dword", Basetype::_dword     },
+    { "qword", Basetype::_qword     }
 };
 
 map < string, Tokentypes > tokens_dict = {
     { "def", Tokentypes::definition },
+    { "redef", Tokentypes::redefinition },
     { "operator", Tokentypes::_operator },
     { "child", Tokentypes::child },
     { "struct", Tokentypes::_struct},
@@ -51,6 +57,8 @@ map < string, Tokentypes > tokens_dict = {
     { "]", Tokentypes::list_end },
     { "(", Tokentypes::parameter_start },
     { ")", Tokentypes::parameter_end },
+    { "{", Tokentypes::struct_start },
+    { "}", Tokentypes::struct_end },
     { ",", Tokentypes::separator },
     { ".", Tokentypes::float_separator },
     { ";", Tokentypes::lf },
@@ -84,8 +92,10 @@ int ROspaces = 0;
 string section_data = "SECTION .data:\n";
 string section_text = "SECTION .text:\n";
 vector<int> argument_order;
+vector<int> fargument_order = { 16, 17, 18, 19, 20, 21, 22, 23, 24 };
 vector<constant> spaces;
 vector<asoperator> operators;
+vector<structure> structs;
 vector<aschild> childs;
 vector<constant> externs;
 vector<string> pcllibs, includes_f, REG;
@@ -118,7 +128,7 @@ int main(int argc, char** argv)
     Options :                                                           \n\
     ----compilation options----                                         \n\
     -o    output file | default: input file.obj                         \n\
-    -cc   calling convention[SysVi386, SysV, M64]                       \n\
+    -cc   calling convention[SysV, ABI, M64, cdecl]                 \n\
     -f    format[elf32, elf64, elfx32, win32, win64]                    \n\
     -n    no start function                                             \n\
     -s    save asm file                                                 \n\
@@ -196,7 +206,7 @@ int main(int argc, char** argv)
 
         if (Args[LsccArg::f] == "elf64" || Args[LsccArg::f] == "win64") {
             architecture = 64;
-            REG.insert(REG.end(), { "rax", "rbx", "rcx", "rdx", "rsi", "rdi", "rbp", "rsp", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15", "xmm0", "xmm1", "xmm2", "xmm3", "eax", "ebx", "ecx", "edx", "esi", "edi", "ebp", "esp", "r8d", "r9d", "r10d", "r11d", "r12d", "r13d", "r14d", "r15d", "cr0", "cr2", "cr3", "cr4", "cr8" });
+            REG.insert(REG.end(), { "rax", "rbx", "rcx", "rdx", "rsi", "rdi", "rbp", "rsp", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15", "xmm0", "xmm1", "xmm2", "xmm3", "eax", "ebx", "ecx", "edx", "esi", "edi", "ebp", "esp", "r8d", "r9d", "r10d", "r11d", "r12d", "r13d", "r14d", "r15d", "cr0", "cr2", "cr3", "cr4", "cr8", "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7" });
         }
         elif(Args[LsccArg::f] == "elf32" || Args[LsccArg::f] == "win32" || Args[LsccArg::f] == "elfx32") {
             architecture = 32; 
@@ -211,17 +221,17 @@ int main(int argc, char** argv)
             argument_order.insert(argument_order.end(), { 2, 3, 8, 9 });
             convention = CallingConvention::M64;
         }
-        elif(Args[LsccArg::cc] == "SysV") {
+        elif(Args[LsccArg::cc] == "ABI") {
             argument_order.insert(argument_order.end(), { 5, 4, 3, 2, 8, 9 });
-            convention = CallingConvention::SysV;
+            convention = CallingConvention::ABI;
         }
-        elif(Args[LsccArg::cc] == "SysVi386") {
+        elif(Args[LsccArg::cc] == "SysV") {
             argument_order.clear();
-            convention = CallingConvention::SysVi386;
+            convention = CallingConvention::SysV;
         }
         elif(Args[LsccArg::cc] == "cdecl") {
             argument_order.insert(argument_order.end(), { 2, 3, 8, 9 });
-            convention = CallingConvention::cdelc;
+            convention = CallingConvention::___cdecl;
         }
         else {
             cout << "Error: invalid calling convention \"" << Args[LsccArg::cc] << "\" !" << endl;
@@ -254,7 +264,7 @@ int main(int argc, char** argv)
         asFile << code;
         asFile.close();
 
-        system(string("nasm " + Args[LsccArg::i] + " -f " + Args[LsccArg::f] + " -o " + Args[LsccArg::o]).c_str());
+        int nasm_success = system(string("nasm " + Args[LsccArg::i] + " -f " + Args[LsccArg::f] + " -o " + Args[LsccArg::o]).c_str());
 
         asFile.open(Args[LsccArg::i]);
         asFile << originalContent.str();
@@ -266,8 +276,12 @@ int main(int argc, char** argv)
             asFile.close();
         }
 
-        cout << Error::errorTypeValid << "Successfully compiled \x1B[33m\"" << Args[LsccArg::i] << "\"\x1B[32m !" << Error::errorTypeNormal << endl;
-
+        if (nasm_success == 0) {
+            cout << Error::errorTypeValid << "Successfully compiled \x1B[33m\"" << Args[LsccArg::i] << "\"\x1B[32m !" << Error::errorTypeNormal << endl;
+        }
+        else {
+            cout << Error::errorTypeError << "UnSuccessfully compiled \x1B[33m\"" << Args[LsccArg::i] << "\"\x1B[31m !" << Error::errorTypeNormal << endl;
+        }
     }
 
     return 0;
